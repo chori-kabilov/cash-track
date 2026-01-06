@@ -101,77 +101,84 @@ catch (OperationCanceledException)
 // HANDLERS
 async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
 {
-    if (update.CallbackQuery is { } callbackQuery)
+    try 
     {
-        await HandleCallbackQueryAsync(botClient, callbackQuery, cancellationToken);
-        return;
-    }
-
-    if (update.Message is not { } message) return;
-    if (message.From is not { } from) return;
-
-    var chatId = message.Chat.Id;
-    var userId = from.Id;
-    var text = (message.Text ?? string.Empty).Trim();
-
-    if (string.IsNullOrWhiteSpace(text)) return;
-    System.Console.WriteLine($"Msg: {text} ({chatId})");
-
-    if (text.StartsWith('/'))
-    {
-        if (string.Equals(text, "/start", StringComparison.OrdinalIgnoreCase))
+        if (update.CallbackQuery is { } callbackQuery)
         {
-            await startCommand.ExecuteAsync(botClient, chatId, from, cancellationToken);
+            await HandleCallbackQueryAsync(botClient, callbackQuery, cancellationToken);
             return;
         }
-        
-        // Handling deep links or special slash commands for items
-        if (text.StartsWith("/pay_debt_"))
-        {
-             if (int.TryParse(text.Substring(10), out var debtId))
-             {
-                 _flow[userId] = new UserFlowState { Step = UserFlowStep.WaitingDebtPayment, PendingDebtId = debtId };
-                 await botClient.SendTextMessageAsync(chatId, "Введите сумму платежа:", replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: cancellationToken);
-                 return;
-             }
-        }
 
-        if (text.StartsWith("/pay_regular_"))
+        if (update.Message is not { } message) return;
+        if (message.From is not { } from) return;
+
+        var chatId = message.Chat.Id;
+        var userId = from.Id;
+        var text = (message.Text ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(text)) return;
+        System.Console.WriteLine($"Msg: {text} ({chatId})");
+
+        if (text.StartsWith('/'))
         {
-             if (int.TryParse(text.Substring(13), out var regId))
-             {
-                 var payment = await regularPaymentService.GetByIdAsync(userId, regId, cancellationToken);
-                 if (payment == null)
+            if (string.Equals(text, "/start", StringComparison.OrdinalIgnoreCase))
+            {
+                await startCommand.ExecuteAsync(botClient, chatId, from, cancellationToken);
+                return;
+            }
+            
+            // Handling deep links or special slash commands for items
+            if (text.StartsWith("/pay_debt_"))
+            {
+                 if (int.TryParse(text.Substring(10), out var debtId))
                  {
-                     await botClient.SendTextMessageAsync(chatId, "❌ Платеж не найден.", replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: cancellationToken);
+                     _flow[userId] = new UserFlowState { Step = UserFlowStep.WaitingDebtPayment, PendingDebtId = debtId };
+                     await botClient.SendTextMessageAsync(chatId, "Введите сумму платежа:", replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: cancellationToken);
                      return;
                  }
+            }
 
-                 await regularPaymentService.MarkAsPaidAsync(userId, regId, cancellationToken);
-                 
-                 var catId = payment.CategoryId ?? (await categoryService.GetUserCategoriesAsync(userId, cancellationToken)).FirstOrDefault(c => c.Type == TransactionType.Expense)?.Id;
-                 
-                 if (catId.HasValue)
+            if (text.StartsWith("/pay_regular_"))
+            {
+                 if (int.TryParse(text.Substring(13), out var regId))
                  {
-                     await AddTransactionAsync(botClient, chatId, userId, payment.Amount, catId.Value, TransactionType.Expense, $"Регулярный платеж: {payment.Name}", false, cancellationToken);
+                     var payment = await regularPaymentService.GetByIdAsync(userId, regId, cancellationToken);
+                     if (payment == null)
+                     {
+                         await botClient.SendTextMessageAsync(chatId, "❌ Платеж не найден.", replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: cancellationToken);
+                         return;
+                     }
+
+                     await regularPaymentService.MarkAsPaidAsync(userId, regId, cancellationToken);
+                     
+                     var catId = payment.CategoryId ?? (await categoryService.GetUserCategoriesAsync(userId, cancellationToken)).FirstOrDefault(c => c.Type == TransactionType.Expense)?.Id;
+                     
+                     if (catId.HasValue)
+                     {
+                         await AddTransactionAsync(botClient, chatId, userId, payment.Amount, catId.Value, TransactionType.Expense, $"Регулярный платеж: {payment.Name}", false, cancellationToken);
+                     }
+                     
+                     await botClient.SendTextMessageAsync(chatId, $"✅ Платеж \"{payment.Name}\" отмечен как оплаченный! След: {payment.NextDueDate:dd.MM.yyyy}", replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: cancellationToken);
+                     return;
                  }
-                 
-                 await botClient.SendTextMessageAsync(chatId, $"✅ Платеж \"{payment.Name}\" отмечен как оплаченный! След: {payment.NextDueDate:dd.MM.yyyy}", replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: cancellationToken);
-                 return;
-             }
+            }
+
+            await SendMainMenuAsync(botClient, chatId, cancellationToken);
+            return;
+        }
+
+        if (_flow.TryGetValue(userId, out var flow))
+        {
+            await HandleUserFlowAsync(botClient, chatId, userId, text, flow, cancellationToken);
+            return;
         }
 
         await SendMainMenuAsync(botClient, chatId, cancellationToken);
-        return;
     }
-
-    if (_flow.TryGetValue(userId, out var flow))
+    catch (Exception ex)
     {
-        await HandleUserFlowAsync(botClient, chatId, userId, text, flow, cancellationToken);
-        return;
+        System.Console.WriteLine($"Error handling update: {ex}");
     }
-
-    await SendMainMenuAsync(botClient, chatId, cancellationToken);
 }
 
 async Task HandleCallbackQueryAsync(ITelegramBotClient botClient, CallbackQuery callbackQuery, CancellationToken cancellationToken)

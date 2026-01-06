@@ -2,6 +2,7 @@ using Console.Bot;
 using Domain.Enums;
 using Infrastructure.Services;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types.Enums;
 
 namespace Console.Commands;
@@ -64,7 +65,14 @@ public class StatsCommand(
 
         if (messageId.HasValue)
         {
-            await botClient.EditMessageTextAsync(chatId, messageId.Value, message, ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: cancellationToken);
+            try
+            {
+                await botClient.EditMessageTextAsync(chatId, messageId.Value, message, ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: cancellationToken);
+            }
+            catch (ApiRequestException ex) when (ex.Message.Contains("message is not modified"))
+            {
+                // Игнорируем ошибку, если содержимое не изменилось
+            }
         }
         else
         {
