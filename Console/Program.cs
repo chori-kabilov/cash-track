@@ -182,7 +182,14 @@ async Task HandleCallbackQueryAsync(ITelegramBotClient botClient, CallbackQuery 
     var userId = callbackQuery.From.Id;
     var data = callbackQuery.Data ?? string.Empty;
 
-    await botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
+    try
+    {
+        await botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
+    }
+    catch (ApiRequestException)
+    {
+        // Игнорируем ошибку, если запрос устарел (например, бот был оффлайн)
+    }
 
     // Global Actions
     if (data == "action:cancel")
