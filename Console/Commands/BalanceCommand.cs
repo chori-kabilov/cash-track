@@ -1,4 +1,3 @@
-using System.Text;
 using Console.Bot;
 using Infrastructure.Services;
 using Telegram.Bot;

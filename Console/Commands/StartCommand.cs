@@ -3,7 +3,6 @@ using Infrastructure.Services;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Console.Commands;
 
@@ -27,24 +26,15 @@ public class StartCommand(IUserService userService, ICategoryService categorySer
 
         await botClient.SendTextMessageAsync(
             chatId: chatId,
-            text: "👋 *Привет! Я — CashTrack.*\n\n" +
-                  "Я помогу тебе взять финансы под контроль. 🚀\n\n" +
+            text: $"👋 *Привет, {telegramUser.FirstName}!*\n\n" +
+                  "Я — *CashTrack*, твой финансовый помощник. 🚀\n\n" +
                   "📌 *Что я умею:*\n" +
-                  "▫️ Записывать доходы и расходы\n" +
-                  "▫️ Ставить финансовые цели\n" +
-                  "▫️ Следить за долгами\n" +
-                  "▫️ Считать регулярные платежи\n\n" +
-                  "👇 Нажми кнопку в меню, чтобы начать!",
+                  "• Записывать доходы и расходы\n" +
+                  "• Ставить финансовые цели\n" +
+                  "• Следить за долгами\n" +
+                  "• Считать регулярные платежи\n\n" +
+                  "👇 *Выберите действие:*",
             parseMode: ParseMode.Markdown,
-            replyMarkup: new ReplyKeyboardRemove(),
-            cancellationToken: cancellationToken);
-
-        // Send Main Menu via helper or command? 
-        // Better to reuse a shared helper or just send it here.
-        // Copying SendMainMenuAsync logic here for independence.
-        await botClient.SendTextMessageAsync(
-            chatId: chatId,
-            text: "Выберите действие:",
             replyMarkup: BotInlineKeyboards.MainMenu(),
             cancellationToken: cancellationToken);
     }

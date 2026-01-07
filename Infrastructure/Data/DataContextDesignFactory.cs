@@ -6,15 +6,12 @@ using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Data;
 
-/// <summary>
-/// Design-time factory ONLY for migrations. Runtime creation uses Program.cs.
-/// Reads connection string from appsettings.json (Console project) or environment variable DefaultConnection.
-/// </summary>
+/// Фабрика для создания DataContext во время выполнения миграций (dotnet ef).
+/// НЕ используется при обычном запуске приложения — там контекст создаётся в Program.cs.
 public sealed class DataContextDesignFactory : IDesignTimeDbContextFactory<DataContext>
 {
     public DataContext CreateDbContext(string[] args)
     {
-        // Try to locate appsettings.json in Console project (startup) or current dir
         var basePath = Directory.GetCurrentDirectory();
 
         var config = new ConfigurationBuilder()
@@ -25,9 +22,14 @@ public sealed class DataContextDesignFactory : IDesignTimeDbContextFactory<DataC
 
         var connectionString =
             config.GetConnectionString("DefaultConnection") ??
-            config["DefaultConnection"] ??
-            Environment.GetEnvironmentVariable("DefaultConnection") ??
-            "Host=localhost;Database=cashtrack_db;Username=postgres;Password=12345";
+            Environment.GetEnvironmentVariable("DefaultConnection");
+
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            throw new InvalidOperationException(
+                "Connection string 'DefaultConnection' не найден. " +
+                "Убедитесь, что appsettings.json существует или задана переменная окружения DefaultConnection.");
+        }
 
         var optionsBuilder = new DbContextOptionsBuilder<DataContext>();
         optionsBuilder.UseNpgsql(connectionString);

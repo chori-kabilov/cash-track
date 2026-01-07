@@ -8,51 +8,38 @@ namespace Domain.Entities;
 public class Category
 {
     [Key]
-    public int Id { get; set; }
+    public int Id { get; set; } // Уникальный идентификатор категории
 
     [Required]
-    public long UserId { get; set; }
+    public long UserId { get; set; } // ID пользователя-владельца
 
     [Required]
     [MaxLength(100)]
-    public string Name { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty; // Название категории
 
     [MaxLength(50)]
-    public string? Icon { get; set; }
+    public string? Icon { get; set; } // Иконка категории (например, эмодзи)
 
-    /// <summary>
-    /// Type of transactions this category is for (Income or Expense).
-    /// Null means category can be used for both types.
-    /// </summary>
-    public TransactionType? Type { get; set; }
+    public TransactionType? Type { get; set; } // Тип операций: Доход или Расход
 
-    /// <summary>
-    /// Priority/importance level of this category.
-    /// </summary>
-    public Priority Priority { get; set; } = Priority.Optional;
+    public Priority Priority { get; set; } = Priority.Optional; // Приоритет (Обязательно/Желательно/Дополнительно)
 
-    /// <summary>
-    /// Parent category ID for subcategories.
-    /// </summary>
-    public int? ParentCategoryId { get; set; }
+    public int? ParentCategoryId { get; set; } // ID родительской категории (для иерархии)
 
-    /// <summary>
-    /// Is this category active (soft delete).
-    /// </summary>
-    public bool IsActive { get; set; } = true;
+    public bool IsActive { get; set; } = true; // Активна ли категория (false = архив)
 
     [Required]
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } // Дата создания записи
 
     // Navigation properties
     [ForeignKey(nameof(UserId))]
-    public User User { get; set; } = null!;
+    public User User { get; set; } = null!; // Ссылка на пользователя
 
     [ForeignKey(nameof(ParentCategoryId))]
-    public Category? ParentCategory { get; set; }
+    public Category? ParentCategory { get; set; } // Ссылка на родительскую категорию
 
-    public List<Category> SubCategories { get; set; } = new();
+    public List<Category> SubCategories { get; set; } = new(); // Список подкатегорий
 
-    public List<Transaction> Transactions { get; set; } = new();
+    public List<Transaction> Transactions { get; set; } = new(); // Транзакции по этой категории
 }
 

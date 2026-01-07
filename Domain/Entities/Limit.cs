@@ -3,70 +3,45 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Domain.Entities;
 
-/// <summary>
-/// Spending limit for a category.
-/// </summary>
 [Table("limits")]
 public class Limit
 {
     [Key]
-    public int Id { get; set; }
+    public int Id { get; set; } // Уникальный идентификатор лимита
 
     [Required]
-    public long UserId { get; set; }
+    public long UserId { get; set; } // ID пользователя-владельца
 
     [Required]
-    public int CategoryId { get; set; }
+    public int CategoryId { get; set; } // ID категории, к которой применен лимит
 
-    /// <summary>
-    /// Maximum amount allowed for this category per period.
-    /// </summary>
     [Required]
     [Column(TypeName = "decimal(18,2)")]
-    public decimal Amount { get; set; }
+    public decimal Amount { get; set; } // Максимальная сумма лимита
 
-    /// <summary>
-    /// Amount spent in current period.
-    /// </summary>
     [Required]
     [Column(TypeName = "decimal(18,2)")]
-    public decimal SpentAmount { get; set; }
+    public decimal SpentAmount { get; set; } // Потраченная сумма за период
 
-    /// <summary>
-    /// Period type: "month" for now.
-    /// </summary>
     [Required]
     [MaxLength(20)]
-    public string Period { get; set; } = "month";
-
-    /// <summary>
-    /// Start of current period.
-    /// </summary>
-    [Required]
-    public DateTimeOffset PeriodStart { get; set; }
-
-    /// <summary>
-    /// Is the category currently blocked due to limit exceeded.
-    /// </summary>
-    public bool IsBlocked { get; set; }
-
-    /// <summary>
-    /// When the block expires.
-    /// </summary>
-    public DateTimeOffset? BlockedUntil { get; set; }
-
-    /// <summary>
-    /// Last warning level sent (50, 80, 100).
-    /// </summary>
-    public int LastWarningLevel { get; set; }
+    public string Period { get; set; } = "month"; // Период лимита (day/week/month/year)
 
     [Required]
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset PeriodStart { get; set; } // Начало текущего периода
+    public bool IsBlocked { get; set; } // Заблокирован ли лимит (превышение)
+    public DateTimeOffset? BlockedUntil { get; set; } // До какой даты заблокирован
+    public int LastWarningLevel { get; set; } // Уровень последнего предупреждения (50%, 80%, 100%)
+    public bool IsDeleted { get; set; } // Удалено ли лимит
+    public DateTimeOffset? DeletedAt { get; set; } // Дата удаления записи
+    
+    [Required]
+    public DateTimeOffset CreatedAt { get; set; } // Дата создания записи
 
     // Navigation properties
     [ForeignKey(nameof(UserId))]
-    public User User { get; set; } = null!;
+    public User User { get; set; } = null!; // Ссылка на пользователя
 
     [ForeignKey(nameof(CategoryId))]
-    public Category Category { get; set; } = null!;
+    public Category Category { get; set; } = null!; // Ссылка на категорию
 }

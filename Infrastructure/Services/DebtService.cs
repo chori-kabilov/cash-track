@@ -100,11 +100,13 @@ public sealed class DebtService(DataContext context) : IDebtService
 
     public async Task<bool> DeleteAsync(long userId, int debtId, CancellationToken cancellationToken = default)
     {
-        var debt = await context.Debts.FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId, cancellationToken);
+        var debt = await context.Debts.FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId && !d.IsDeleted, cancellationToken);
         if (debt == null)
             return false;
 
-        context.Debts.Remove(debt);
+        debt.IsDeleted = true;
+        debt.DeletedAt = DateTimeOffset.UtcNow;
+
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }

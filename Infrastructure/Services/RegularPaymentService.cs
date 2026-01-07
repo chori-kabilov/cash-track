@@ -107,7 +107,8 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
         if (payment == null)
             return false;
 
-        context.RegularPayments.Remove(payment);
+        payment.IsDeleted = true;
+        payment.DeletedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }

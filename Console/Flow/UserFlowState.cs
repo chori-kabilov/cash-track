@@ -1,6 +1,9 @@
 ﻿using Domain.Enums;
 
-internal sealed class UserFlowState
+namespace Console.Flow;
+
+// Состояние диалога с пользователем (хранится в памяти)
+public sealed class UserFlowState
 {
     public UserFlowStep Step { get; set; }
     public TransactionType PendingType { get; set; }

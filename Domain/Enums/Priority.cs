@@ -1,22 +1,8 @@
 namespace Domain.Enums;
 
-/// <summary>
-/// Priority level for categories and other entities.
-/// </summary>
 public enum Priority
 {
-    /// <summary>
-    /// 🔴 Обязательно — critical expenses that must be paid.
-    /// </summary>
-    Required = 1,
-
-    /// <summary>
-    /// 🟡 Желательно — preferred but not critical.
-    /// </summary>
-    Preferred = 2,
-
-    /// <summary>
-    /// 🟢 Можно и без этого — optional, can skip.
-    /// </summary>
-    Optional = 3
+    Required = 1, // Обязательные (Аренда, еда)
+    Preferred = 2, // Желательные (Хобби, обучение)
+    Optional = 3 // Необязательные (Развлечения, излишества)
 }

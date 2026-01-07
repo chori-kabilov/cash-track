@@ -1,32 +1,17 @@
-using Domain.Entities;
 using Infrastructure.Data;
 using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
+using Telegram.Bot.Types.Enums;
 
 namespace Console.Services;
 
-public class SchedulerService
+public class SchedulerService(ITelegramBotClient botClient, DbContextOptions<DataContext> dbOptions)
 {
-    private readonly ITelegramBotClient _botClient;
-    private readonly DbContextOptions<DataContext> _dbOptions;
     private readonly CancellationTokenSource _cts = new();
 
-    public SchedulerService(ITelegramBotClient botClient, DbContextOptions<DataContext> dbOptions)
-    {
-        _botClient = botClient;
-        _dbOptions = dbOptions;
-    }
-
-    public void Start()
-    {
-        Task.Run(() => RunLoopAsync(_cts.Token));
-    }
-
-    public void Stop()
-    {
-        _cts.Cancel();
-    }
+    public void Start() => Task.Run(() => RunLoopAsync(_cts.Token));
+    public void Stop() => _cts.Cancel();
 
     private async Task RunLoopAsync(CancellationToken token)
     {
@@ -34,22 +19,15 @@ public class SchedulerService
         {
             try
             {
-                var now = DateTimeOffset.UtcNow;
-                // Run only if it is between 9:00 and 10:00 AM UTC (approx morning)
-                // Or just run every check and keep track of "LastSent"?
-                // MVP: Run every hour, check if we need to send reminders.
-                // To avoid spam, we need to know if we already sent reminder today.
-                // BUT we don't store "LastReminderSent" in DB for all items.
-                // RegularPayments has "ReminderDaysBefore".
+                // Проверяем напоминания только в 9:00 UTC (14:00 по Душанбе)
+                if (DateTimeOffset.UtcNow.Hour == 9)
+                    await CheckRemindersAsync(token);
                 
-                await CheckRemindersAsync(token);
-                
-                // Sleep 1 hour
                 await Task.Delay(TimeSpan.FromHours(1), token);
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Scheduler Error: {ex.Message}");
+                System.Console.WriteLine($"Scheduler: {ex.Message}");
                 await Task.Delay(TimeSpan.FromMinutes(5), token);
             }
         }
@@ -57,54 +35,30 @@ public class SchedulerService
 
     private async Task CheckRemindersAsync(CancellationToken token)
     {
-        using var context = new DataContext(_dbOptions);
+        using var context = new DataContext(dbOptions);
         var regularService = new RegularPaymentService(context);
         var debtService = new DebtService(context);
-        var userService = new UserService(context); // To get user chat ID if needed? 
-        // Note: Telegram User ID is usually Chat ID for private chats.
-        // User entity has Id which is Telegram ID.
 
-        // 1. Regular Payments
-        var users = await context.Users.Select(u => u.Id).ToListAsync(token);
+        var userIds = await context.Users.Select(u => u.Id).ToListAsync(token);
 
-        foreach (var userId in users)
+        foreach (var userId in userIds)
         {
-            try 
+            try
             {
-                // We need to pass options so we use CreateAsync with provided options?
-                // Services expect DataContext.
-                
+                // Регулярные платежи
                 var duePayments = await regularService.GetDuePaymentsAsync(userId, token);
                 foreach (var p in duePayments)
-                {
-                    // Check if we should send reminder?
-                    // GetDuePaymentsAsync returns payments where (NextDate - ReminderDays) <= Now.
-                    // We need to avoid spamming every hour.
-                    // We can check if hour is 9 AM? 
-                    // Let's assume we run this check daily or we enforce hour check.
-                    
-                    if (DateTimeOffset.UtcNow.Hour == 9) // UTC 9 AM
-                    {
-                         await _botClient.SendTextMessageAsync(userId, $"🔔 *Напоминание*: Платеж \"{p.Name}\" ({p.Amount:F2}) ожидает оплаты {p.NextDueDate:dd.MM.yyyy}", Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: token);
-                    }
-                }
+                    await SendAsync(userId, $"🔔 Платеж \"{p.Name}\" ({p.Amount:F2}) — {p.NextDueDate:dd.MM}", token);
 
-                // 2. Overdue Debts
-                if (DateTimeOffset.UtcNow.Hour == 9)
-                {
-                    var overdueDebts = await debtService.GetOverdueDebtsAsync(userId, token);
-                    foreach (var d in overdueDebts)
-                    {
-                         // Ask to remind only once? or Daily?
-                         // Daily reminder for overdue.
-                         await _botClient.SendTextMessageAsync(userId, $"⚠️ *Просроченный долг*: {d.PersonName} ({d.Amount - d.RemainingAmount}/{d.Amount}) был должен до {d.DueDate:dd.MM.yyyy}", Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: token);
-                    }
-                }
+                // Просроченные долги
+                var overdueDebts = await debtService.GetOverdueDebtsAsync(userId, token);
+                foreach (var d in overdueDebts)
+                    await SendAsync(userId, $"⚠️ Долг: {d.PersonName} — просрочен с {d.DueDate:dd.MM}", token);
             }
-            catch (Exception ex)
-            {
-                System.Console.WriteLine($"Error processing user {userId}: {ex.Message}");
-            }
+            catch { /* Пропускаем ошибки отдельных пользователей */ }
         }
     }
+
+    private Task SendAsync(long chatId, string text, CancellationToken token) =>
+        botClient.SendTextMessageAsync(chatId, text, ParseMode.Markdown, cancellationToken: token);
 }

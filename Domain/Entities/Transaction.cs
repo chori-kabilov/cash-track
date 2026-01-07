@@ -8,50 +8,38 @@ namespace Domain.Entities;
 public class Transaction
 {
     [Key]
-    public int Id { get; set; }
+    public int Id { get; set; } // Уникальный идентификатор транзакции
 
     [Required]
-    public int AccountId { get; set; }
+    public int AccountId { get; set; } // ID счета, с которого/на который
 
     [Required]
-    public int CategoryId { get; set; }
+    public int CategoryId { get; set; } // ID категории транзакции
 
     [Required]
     [Column(TypeName = "decimal(18,2)")]
-    public decimal Amount { get; set; }
+    public decimal Amount { get; set; } // Сумма транзакции (всегда положительная)
 
     [Required]
-    public TransactionType Type { get; set; }
+    public TransactionType Type { get; set; } // Тип: Доход или Расход
 
     [MaxLength(500)]
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// Was this an impulse purchase.
-    /// </summary>
-    public bool IsImpulsive { get; set; }
-
-    /// <summary>
-    /// Is this a draft (no description provided yet).
-    /// </summary>
-    public bool IsDraft { get; set; }
-
-    /// <summary>
-    /// Is this marked as an error (not deleted, just flagged).
-    /// </summary>
-    public bool IsError { get; set; }
+    public string? Description { get; set; } // Описание транзакции
+    public bool IsImpulsive { get; set; } // "На эмоциях" - эмоциональная /незапланированная покупка
+    public bool IsDraft { get; set; } // Черновик (не учитывается в балансе)
+    public bool IsError { get; set; } // Ошибочная транзакция (отменена)
 
     [Required]
-    public DateTimeOffset Date { get; set; }
+    public DateTimeOffset Date { get; set; } // Дата совершения транзакции
 
     [Required]
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } // Дата создания записи в системе
 
     // Navigation properties
     [ForeignKey(nameof(AccountId))]
-    public Account Account { get; set; } = null!;
+    public Account Account { get; set; } = null!; // Ссылка на счет
 
     [ForeignKey(nameof(CategoryId))]
-    public Category Category { get; set; } = null!;
+    public Category Category { get; set; } = null!; // Ссылка на категорию
 }
 

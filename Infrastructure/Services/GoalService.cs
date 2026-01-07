@@ -116,7 +116,9 @@ public sealed class GoalService(DataContext context) : IGoalService
         if (goal == null)
             return false;
 
-        context.Goals.Remove(goal);
+        goal.IsDeleted = true;
+        goal.DeletedAt = DateTimeOffset.UtcNow;
+
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }

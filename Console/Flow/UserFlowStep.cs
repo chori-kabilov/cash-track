@@ -1,4 +1,7 @@
-﻿internal enum UserFlowStep
+﻿namespace Console.Flow;
+
+// Шаги диалогового потока с пользователем
+public enum UserFlowStep
 {
     None = 0,
     WaitingAmount = 1,

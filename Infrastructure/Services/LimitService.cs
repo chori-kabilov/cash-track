@@ -151,7 +151,8 @@ public sealed class LimitService(DataContext context) : ILimitService
         if (limit == null)
             return false;
 
-        context.Limits.Remove(limit);
+        limit.IsDeleted = true;
+        limit.DeletedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }

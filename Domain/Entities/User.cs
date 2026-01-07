@@ -8,59 +8,45 @@ public class User
 {
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
-    public long Id { get; set; }
+    public long Id { get; set; } // Telegram ID (главный ключ)
 
     [Required]
     [MaxLength(255)]
-    public string FirstName { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty; // Имя пользователя
 
     [MaxLength(255)]
-    public string? LastName { get; set; }
+    public string? LastName { get; set; } // Фамилия (опционально)
 
     [MaxLength(255)]
-    public string? Username { get; set; }
+    public string? Username { get; set; } // @username в Telegram
 
     [MaxLength(10)]
-    public string? LanguageCode { get; set; }
+    public string? LanguageCode { get; set; } // Языковой код (ru, en)
 
-    public bool? IsBot { get; set; }
+    public bool? IsBot { get; set; } // Является ли ботом
 
-    /// <summary>
-    /// User's timezone (default: Asia/Dushanbe = UTC+5).
-    /// </summary>
     [MaxLength(50)]
-    public string Timezone { get; set; } = "Asia/Dushanbe";
+    public string Timezone { get; set; } = "Asia/Dushanbe"; // Часовой пояс пользователя
+    public bool IsBalanceHidden { get; set; } = true; // Скрыт ли баланс в меню
+    public bool HasCompletedOnboarding { get; set; } // Прошел ли обучение
 
-    /// <summary>
-    /// Hide balance until user explicitly asks.
-    /// </summary>
-    public bool IsBalanceHidden { get; set; } = true;
-
-    /// <summary>
-    /// Has user completed onboarding tutorial.
-    /// </summary>
-    public bool HasCompletedOnboarding { get; set; }
-
-    /// <summary>
-    /// Initial balance set during onboarding.
-    /// </summary>
     [Column(TypeName = "decimal(18,2)")]
-    public decimal? InitialBalance { get; set; }
+    public decimal? InitialBalance { get; set; } // Начальный баланс (при регистрации)
 
-    public DateTimeOffset? LastMessageAt { get; set; }
-
-    [Required]
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? LastMessageAt { get; set; } // Время последнего сообщения от пользователя
 
     [Required]
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } // Дата регистрации
+
+    [Required]
+    public DateTimeOffset UpdatedAt { get; set; } // Дата последнего изменения
 
     // Navigation properties
-    public List<Account> Accounts { get; set; } = new();
-    public List<Category> Categories { get; set; } = new();
-    public List<Goal> Goals { get; set; } = new();
-    public List<Debt> Debts { get; set; } = new();
-    public List<RegularPayment> RegularPayments { get; set; } = new();
-    public List<Limit> Limits { get; set; } = new();
+    public List<Account> Accounts { get; set; } = new(); // Счета пользователя
+    public List<Category> Categories { get; set; } = new(); // Категории пользователя
+    public List<Goal> Goals { get; set; } = new(); // Цели пользователя
+    public List<Debt> Debts { get; set; } = new(); // Долги пользователя
+    public List<RegularPayment> RegularPayments { get; set; } = new(); // Регулярные платежи
+    public List<Limit> Limits { get; set; } = new(); // Лимиты пользователя
 }
 

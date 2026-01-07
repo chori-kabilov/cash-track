@@ -4,74 +4,43 @@ using Domain.Enums;
 
 namespace Domain.Entities;
 
-/// <summary>
-/// Regular recurring payment.
-/// </summary>
 [Table("regular_payments")]
 public class RegularPayment
 {
     [Key]
-    public int Id { get; set; }
+    public int Id { get; set; } // Уникальный идентификатор регулярного платежа
 
     [Required]
-    public long UserId { get; set; }
+    public long UserId { get; set; } // ID пользователя-владельца
 
-    /// <summary>
-    /// Category for this payment.
-    /// </summary>
-    public int? CategoryId { get; set; }
+    public int? CategoryId { get; set; } // ID категории (опционально)
 
     [Required]
     [MaxLength(100)]
-    public string Name { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty; // Название (например, "Интернет")
 
     [Required]
     [Column(TypeName = "decimal(18,2)")]
-    public decimal Amount { get; set; }
-
-    /// <summary>
-    /// How often this payment occurs.
-    /// </summary>
-    [Required]
-    public PaymentFrequency Frequency { get; set; }
-
-    /// <summary>
-    /// Day of month for monthly payments (1-31).
-    /// </summary>
-    public int? DayOfMonth { get; set; }
-
-    /// <summary>
-    /// Day of week for weekly payments (0-6, Sunday = 0).
-    /// </summary>
-    public int? DayOfWeek { get; set; }
-
-    /// <summary>
-    /// How many days before to send reminder.
-    /// </summary>
-    public int ReminderDaysBefore { get; set; } = 3;
-
-    /// <summary>
-    /// Is this payment temporarily paused.
-    /// </summary>
-    public bool IsPaused { get; set; }
-
-    /// <summary>
-    /// When was this payment last marked as paid.
-    /// </summary>
-    public DateTimeOffset? LastPaidDate { get; set; }
-
-    /// <summary>
-    /// Next due date for this payment.
-    /// </summary>
-    public DateTimeOffset? NextDueDate { get; set; }
+    public decimal Amount { get; set; } // Сумма платежа
 
     [Required]
-    public DateTimeOffset CreatedAt { get; set; }
+    public PaymentFrequency Frequency { get; set; } // Частота (ежедневно/еженедельно/ежемесячно)
+    public int? DayOfMonth { get; set; } // День месяца (для ежемесячных)
+    public int? DayOfWeek { get; set; } // День недели (для еженедельных)
+    public int ReminderDaysBefore { get; set; } = 3; // За сколько дней напомнить
+    public bool IsPaused { get; set; } // Приостановлен ли платеж
+    public DateTimeOffset? LastPaidDate { get; set; } // Дата последней оплаты
+    public DateTimeOffset? NextDueDate { get; set; } // Дата следующего платежа
+    public bool IsDeleted { get; set; } // Удалено ли платеж
+    public DateTimeOffset? DeletedAt { get; set; } // Дата удаления записи
+
+    [Required]
+    public DateTimeOffset CreatedAt { get; set; } // Дата создания записи
 
     // Navigation properties
     [ForeignKey(nameof(UserId))]
-    public User User { get; set; } = null!;
+    public User User { get; set; } = null!; // Ссылка на пользователя
 
     [ForeignKey(nameof(CategoryId))]
-    public Category? Category { get; set; }
+    public Category? Category { get; set; } // Ссылка на категорию
 }
