@@ -35,6 +35,10 @@ public class Transaction
     [Required]
     public DateTimeOffset CreatedAt { get; set; } // Дата создания записи в системе
 
+    // Soft Delete
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+
     // Navigation properties
     [ForeignKey(nameof(AccountId))]
     public Account Account { get; set; } = null!; // Ссылка на счет

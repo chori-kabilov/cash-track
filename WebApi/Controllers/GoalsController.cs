@@ -1,89 +1,121 @@
 using Microsoft.AspNetCore.Mvc;
 using Infrastructure.Services;
+using Infrastructure.Mappers;
 using Domain.DTOs;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace WebApi.Controllers;
 
 // Контроллер целей
 [ApiController]
 [Route("api/goals")]
+[SwaggerTag("Управление целями накопления")]
 public class GoalsController(IGoalService goalService) : ControllerBase
 {
-    // Маппинг в DTO
-    private static GoalDto ToDto(Domain.Entities.Goal g) => new(
-        g.Id,
-        g.Name,
-        g.TargetAmount,
-        g.CurrentAmount,
-        g.TargetAmount - g.CurrentAmount,
-        g.TargetAmount > 0 ? Math.Round((double)(g.CurrentAmount / g.TargetAmount) * 100, 1) : 0,
-        g.Deadline,
-        g.IsActive,
-        g.IsCompleted,
-        g.CreatedAt
-    );
+    // === READ ===
 
-    // Получить все цели
     [HttpGet("user/{userId}")]
+    [SwaggerOperation(Summary = "Все активные цели", Description = "Не завершённые")]
     public async Task<ActionResult<IEnumerable<GoalDto>>> GetByUser(long userId)
     {
         var goals = await goalService.GetUserGoalsAsync(userId);
-        return Ok(goals.Select(ToDto));
+        return Ok(goals.Select(GoalMapper.ToDto));
     }
 
-    // Получить активную цель
+    [HttpGet("user/{userId}/completed")]
+    [SwaggerOperation(Summary = "Завершённые цели", Description = "История достигнутых целей")]
+    public async Task<ActionResult<IEnumerable<GoalDto>>> GetCompleted(long userId)
+    {
+        var goals = await goalService.GetCompletedAsync(userId);
+        return Ok(goals.Select(GoalMapper.ToDto));
+    }
+
     [HttpGet("user/{userId}/active")]
+    [SwaggerOperation(Summary = "Активная цель", Description = "Текущая приоритетная")]
     public async Task<ActionResult<GoalDto>> GetActive(long userId)
     {
         var g = await goalService.GetActiveGoalAsync(userId);
-        return g != null ? Ok(ToDto(g)) : NotFound(new { Message = "Нет активной цели" });
+        return g != null ? Ok(GoalMapper.ToDto(g)) : NotFound(new { Message = "Нет активной цели" });
     }
 
-    // Получить по ID
     [HttpGet("{goalId}/user/{userId}")]
+    [SwaggerOperation(Summary = "По ID")]
     public async Task<ActionResult<GoalDto>> GetById(long userId, int goalId)
     {
         var g = await goalService.GetByIdAsync(userId, goalId);
-        return g != null ? Ok(ToDto(g)) : NotFound();
+        return g != null ? Ok(GoalMapper.ToDto(g)) : NotFound();
     }
 
-    // Создать цель
+    // === CREATE ===
+
     [HttpPost("user/{userId}")]
-    public async Task<ActionResult<GoalDto>> Create(long userId, [FromQuery] string name, [FromQuery] decimal targetAmount, [FromQuery] DateTimeOffset? deadline = null)
+    [SwaggerOperation(Summary = "Создать цель")]
+    public async Task<ActionResult<GoalDto>> Create(
+        long userId,
+        [FromQuery] string name,
+        [FromQuery] decimal targetAmount,
+        [FromQuery] DateTimeOffset? deadline = null)
     {
         var g = await goalService.CreateAsync(userId, name, targetAmount, deadline);
-        return Ok(ToDto(g));
+        return Ok(GoalMapper.ToDto(g));
     }
 
-    // Пополнить цель
+    // === UPDATE ===
+
+    [HttpPut("{goalId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Обновить цель", Description = "Имя, сумма, дедлайн")]
+    public async Task<ActionResult<GoalDto>> Update(
+        long userId,
+        int goalId,
+        [FromQuery] string name,
+        [FromQuery] decimal targetAmount,
+        [FromQuery] DateTimeOffset? deadline = null)
+    {
+        var g = await goalService.UpdateAsync(userId, goalId, name, targetAmount, deadline);
+        return g != null ? Ok(GoalMapper.ToDto(g)) : NotFound();
+    }
+
     [HttpPost("{goalId}/user/{userId}/deposit")]
+    [SwaggerOperation(Summary = "Пополнить", Description = "Добавить к накоплению")]
     public async Task<ActionResult<GoalDto>> Deposit(long userId, int goalId, [FromQuery] decimal amount)
     {
+        if (amount <= 0) return BadRequest(new { Error = "Сумма должна быть > 0" });
         var g = await goalService.AddFundsAsync(userId, goalId, amount);
-        return g != null ? Ok(ToDto(g)) : NotFound();
+        return g != null ? Ok(GoalMapper.ToDto(g)) : NotFound();
     }
 
-    // Активировать
+    [HttpPost("{goalId}/user/{userId}/withdraw")]
+    [SwaggerOperation(Summary = "Снять", Description = "Снять с накопления")]
+    public async Task<ActionResult<GoalDto>> Withdraw(long userId, int goalId, [FromQuery] decimal amount)
+    {
+        if (amount <= 0) return BadRequest(new { Error = "Сумма должна быть > 0" });
+        var g = await goalService.WithdrawAsync(userId, goalId, amount);
+        return g != null ? Ok(GoalMapper.ToDto(g)) : NotFound(new { Error = "Недостаточно средств" });
+    }
+
     [HttpPut("{goalId}/user/{userId}/activate")]
+    [SwaggerOperation(Summary = "Активировать", Description = "Сделать приоритетной")]
     public async Task<ActionResult<GoalDto>> Activate(long userId, int goalId)
     {
         var g = await goalService.SetActiveAsync(userId, goalId);
-        return g != null ? Ok(ToDto(g)) : NotFound();
+        return g != null ? Ok(GoalMapper.ToDto(g)) : NotFound();
     }
 
-    // Выполнить
     [HttpPut("{goalId}/user/{userId}/complete")]
+    [SwaggerOperation(Summary = "Завершить", Description = "Отметить как достигнутую")]
     public async Task<ActionResult<GoalDto>> Complete(long userId, int goalId)
     {
         var g = await goalService.CompleteAsync(userId, goalId);
-        return g != null ? Ok(ToDto(g)) : NotFound();
+        return g != null ? Ok(GoalMapper.ToDto(g)) : NotFound();
     }
 
-    // Удалить
+    // === DELETE ===
+
     [HttpDelete("{goalId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Удалить", Description = "Soft delete")]
     public async Task<ActionResult> Delete(long userId, int goalId)
     {
         var result = await goalService.DeleteAsync(userId, goalId);
-        return result ? Ok(new { Message = "Удалено" }) : NotFound();
+        return result ? Ok(new { Message = "Цель удалена" }) : NotFound();
     }
 }

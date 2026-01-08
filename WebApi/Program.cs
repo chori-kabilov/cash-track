@@ -28,8 +28,9 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "CashTrack API",
         Version = "v1.0",
-        Description = "API для управления всеми данными CashTrack бота"
+        Description = "API для управления CashTrack"
     });
+    c.EnableAnnotations();
 });
 
 var app = builder.Build();

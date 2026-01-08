@@ -41,6 +41,10 @@ public class User
     [Required]
     public DateTimeOffset UpdatedAt { get; set; } // Дата последнего изменения
 
+    // Soft Delete
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+
     // Navigation properties
     public List<Account> Accounts { get; set; } = new(); // Счета пользователя
     public List<Category> Categories { get; set; } = new(); // Категории пользователя

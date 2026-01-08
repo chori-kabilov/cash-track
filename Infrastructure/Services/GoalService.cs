@@ -122,4 +122,38 @@ public sealed class GoalService(DataContext context) : IGoalService
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    // Получить завершённые
+    public async Task<IReadOnlyList<Goal>> GetCompletedAsync(long userId, CancellationToken ct = default)
+    {
+        return await context.Goals.AsNoTracking()
+            .Where(g => g.UserId == userId && g.IsCompleted && !g.IsDeleted)
+            .OrderByDescending(g => g.CompletedAt)
+            .ToListAsync(ct);
+    }
+
+    // Обновить
+    public async Task<Goal?> UpdateAsync(long userId, int goalId, string name, decimal targetAmount, DateTimeOffset? deadline, CancellationToken ct = default)
+    {
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, ct);
+        if (goal == null) return null;
+
+        goal.Name = name.Trim();
+        goal.TargetAmount = targetAmount;
+        goal.Deadline = deadline;
+        await context.SaveChangesAsync(ct);
+        return goal;
+    }
+
+    // Снять со счёта цели
+    public async Task<Goal?> WithdrawAsync(long userId, int goalId, decimal amount, CancellationToken ct = default)
+    {
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, ct);
+        if (goal == null || goal.CurrentAmount < amount) return null;
+
+        goal.CurrentAmount -= amount;
+        await context.SaveChangesAsync(ct);
+        return goal;
+    }
 }
+

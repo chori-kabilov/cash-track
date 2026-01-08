@@ -29,6 +29,10 @@ public class Account
     [Required]
     public DateTimeOffset UpdatedAt { get; set; } // Дата последнего обновления записи
 
+    // Soft Delete
+    public bool IsDeleted { get; set; } // Удалён ли счёт
+    public DateTimeOffset? DeletedAt { get; set; } // Дата удаления
+
     // Navigation properties
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!; // Ссылка на пользователя

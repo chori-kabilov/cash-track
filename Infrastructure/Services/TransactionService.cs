@@ -243,4 +243,74 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
             throw;
         }
     }
+
+    // Получить по ID
+    public async Task<Transaction?> GetByIdAsync(int id, CancellationToken ct = default)
+    {
+        return await context.Transactions.AsNoTracking()
+            .Include(t => t.Category)
+            .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted, ct);
+    }
+
+    // Получить по категории
+    public async Task<IReadOnlyList<Transaction>> GetByCategoryAsync(long userId, int categoryId, int limit = 50, CancellationToken ct = default)
+    {
+        return await context.Transactions.AsNoTracking()
+            .Include(t => t.Category)
+            .Where(t => t.Account.UserId == userId && t.CategoryId == categoryId && !t.IsDeleted)
+            .OrderByDescending(t => t.Date)
+            .Take(limit)
+            .ToListAsync(ct);
+    }
+
+    // Обновить описание
+    public async Task<Transaction?> UpdateDescriptionAsync(int id, string? description, CancellationToken ct = default)
+    {
+        var txn = await context.Transactions.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted, ct);
+        if (txn == null) return null;
+
+        txn.Description = description;
+        await context.SaveChangesAsync(ct);
+        
+        return await context.Transactions.AsNoTracking()
+            .Include(t => t.Category)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+    }
+
+    // Отменить (пометить как ошибочную)
+    public async Task<Transaction?> CancelAsync(int id, CancellationToken ct = default)
+    {
+        var txn = await context.Transactions.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && !t.IsError, ct);
+        if (txn == null) return null;
+
+        // Вернуть деньги на счёт
+        var account = await context.Accounts.FirstOrDefaultAsync(a => a.Id == txn.AccountId, ct);
+        if (account != null)
+        {
+            if (txn.Type == TransactionType.Expense)
+                account.Balance += txn.Amount;
+            else
+                account.Balance -= txn.Amount;
+            account.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        txn.IsError = true;
+        await context.SaveChangesAsync(ct);
+        
+        return await context.Transactions.AsNoTracking()
+            .Include(t => t.Category)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+    }
+
+    // Soft Delete
+    public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
+    {
+        var txn = await context.Transactions.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted, ct);
+        if (txn == null) return false;
+
+        txn.IsDeleted = true;
+        txn.DeletedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(ct);
+        return true;
+    }
 }

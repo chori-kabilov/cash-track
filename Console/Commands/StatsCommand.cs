@@ -15,7 +15,7 @@ public class StatsCommand(
     public async Task ExecuteAsync(ITelegramBotClient botClient, long chatId, long userId, CancellationToken cancellationToken, int? messageId = null)
     {
         var account = await accountService.GetUserAccountAsync(userId, cancellationToken)
-                      ?? await accountService.CreateAccountAsync(userId, cancellationToken: cancellationToken);
+                      ?? await accountService.CreateAccountAsync(userId, ct: cancellationToken);
 
         var currency = account.Currency;
         var nowUtc = DateTimeOffset.UtcNow;

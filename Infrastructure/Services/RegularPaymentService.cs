@@ -113,6 +113,41 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
         return true;
     }
 
+    // Активные (не на паузе)
+    public async Task<IReadOnlyList<RegularPayment>> GetActiveAsync(long userId, CancellationToken ct = default)
+    {
+        return await context.RegularPayments.AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => p.UserId == userId && !p.IsPaused && !p.IsDeleted)
+            .OrderBy(p => p.NextDueDate ?? DateTimeOffset.MaxValue)
+            .ToListAsync(ct);
+    }
+
+    // По частоте
+    public async Task<IReadOnlyList<RegularPayment>> GetByFrequencyAsync(long userId, PaymentFrequency frequency, CancellationToken ct = default)
+    {
+        return await context.RegularPayments.AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => p.UserId == userId && p.Frequency == frequency && !p.IsDeleted)
+            .OrderBy(p => p.NextDueDate ?? DateTimeOffset.MaxValue)
+            .ToListAsync(ct);
+    }
+
+    // Обновить
+    public async Task<RegularPayment?> UpdateAsync(long userId, int paymentId, string name, decimal amount, int? categoryId, CancellationToken ct = default)
+    {
+        var payment = await context.RegularPayments
+            .Include(p => p.Category)
+            .FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId && !p.IsDeleted, ct);
+        if (payment == null) return null;
+
+        payment.Name = name.Trim();
+        payment.Amount = amount;
+        payment.CategoryId = categoryId;
+        await context.SaveChangesAsync(ct);
+        return payment;
+    }
+
     private static DateTimeOffset CalculateNextDueDate(DateTimeOffset from, PaymentFrequency frequency, int? dayOfMonth)
     {
         return frequency switch

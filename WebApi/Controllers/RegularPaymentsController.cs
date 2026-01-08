@@ -1,56 +1,62 @@
 using Microsoft.AspNetCore.Mvc;
 using Infrastructure.Services;
+using Infrastructure.Mappers;
 using Domain.DTOs;
 using Domain.Enums;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace WebApi.Controllers;
 
 // Контроллер регулярных платежей
 [ApiController]
 [Route("api/regular-payments")]
+[SwaggerTag("Управление регулярными платежами")]
 public class RegularPaymentsController(IRegularPaymentService regularPaymentService) : ControllerBase
 {
-    // Маппинг в DTO
-    private static RegularPaymentDto ToDto(Domain.Entities.RegularPayment r) => new(
-        r.Id,
-        r.Name,
-        r.Amount,
-        r.Frequency,
-        r.Frequency switch { PaymentFrequency.Daily => "Ежедневно", PaymentFrequency.Weekly => "Еженедельно", PaymentFrequency.Monthly => "Ежемесячно", _ => "Ежегодно" },
-        r.DayOfMonth,
-        r.NextDueDate,
-        r.LastPaidDate,
-        r.IsPaused,
-        r.NextDueDate < DateTimeOffset.UtcNow && !r.IsPaused,
-        r.Category != null ? new CategoryDto(r.Category.Id, r.Category.Name, r.Category.Icon, r.Category.Type, r.Category.Priority, r.Category.IsActive) : null
-    );
+    // === READ ===
 
-    // Получить все
     [HttpGet("user/{userId}")]
+    [SwaggerOperation(Summary = "Все платежи")]
     public async Task<ActionResult<IEnumerable<RegularPaymentDto>>> GetByUser(long userId)
     {
         var payments = await regularPaymentService.GetUserPaymentsAsync(userId);
-        return Ok(payments.Select(ToDto));
+        return Ok(payments.Select(RegularPaymentMapper.ToDto));
     }
 
-    // Предстоящие
+    [HttpGet("user/{userId}/active")]
+    [SwaggerOperation(Summary = "Активные", Description = "Не на паузе")]
+    public async Task<ActionResult<IEnumerable<RegularPaymentDto>>> GetActive(long userId)
+    {
+        var payments = await regularPaymentService.GetActiveAsync(userId);
+        return Ok(payments.Select(RegularPaymentMapper.ToDto));
+    }
+
+    [HttpGet("user/{userId}/frequency/{frequency}")]
+    [SwaggerOperation(Summary = "По частоте", Description = "Daily/Weekly/Monthly/Yearly")]
+    public async Task<ActionResult<IEnumerable<RegularPaymentDto>>> GetByFrequency(long userId, PaymentFrequency frequency)
+    {
+        var payments = await regularPaymentService.GetByFrequencyAsync(userId, frequency);
+        return Ok(payments.Select(RegularPaymentMapper.ToDto));
+    }
+
     [HttpGet("user/{userId}/due")]
+    [SwaggerOperation(Summary = "Предстоящие", Description = "Скоро нужно оплатить")]
     public async Task<ActionResult<IEnumerable<RegularPaymentDto>>> GetDue(long userId)
     {
         var payments = await regularPaymentService.GetDuePaymentsAsync(userId);
-        return Ok(payments.Select(ToDto));
+        return Ok(payments.Select(RegularPaymentMapper.ToDto));
     }
 
-    // Просроченные
     [HttpGet("user/{userId}/overdue")]
+    [SwaggerOperation(Summary = "Просроченные")]
     public async Task<ActionResult<IEnumerable<RegularPaymentDto>>> GetOverdue(long userId)
     {
         var payments = await regularPaymentService.GetOverduePaymentsAsync(userId);
-        return Ok(payments.Select(ToDto));
+        return Ok(payments.Select(RegularPaymentMapper.ToDto));
     }
 
-    // Сводка
     [HttpGet("user/{userId}/summary")]
+    [SwaggerOperation(Summary = "Сводка")]
     public async Task<ActionResult<RegularPaymentSummaryDto>> GetSummary(long userId)
     {
         var payments = await regularPaymentService.GetUserPaymentsAsync(userId);
@@ -65,43 +71,69 @@ public class RegularPaymentsController(IRegularPaymentService regularPaymentServ
         ));
     }
 
-    // По ID
     [HttpGet("{paymentId}/user/{userId}")]
+    [SwaggerOperation(Summary = "По ID")]
     public async Task<ActionResult<RegularPaymentDto>> GetById(long userId, int paymentId)
     {
         var r = await regularPaymentService.GetByIdAsync(userId, paymentId);
-        return r != null ? Ok(ToDto(r)) : NotFound();
+        return r != null ? Ok(RegularPaymentMapper.ToDto(r)) : NotFound();
     }
 
-    // Создать
+    // === CREATE ===
+
     [HttpPost("user/{userId}")]
-    public async Task<ActionResult<RegularPaymentDto>> Create(long userId, [FromQuery] string name, [FromQuery] decimal amount, [FromQuery] PaymentFrequency frequency, [FromQuery] int? categoryId = null, [FromQuery] int? dayOfMonth = null, [FromQuery] int reminderDaysBefore = 3)
+    [SwaggerOperation(Summary = "Создать платёж")]
+    public async Task<ActionResult<RegularPaymentDto>> Create(
+        long userId,
+        [FromQuery] string name,
+        [FromQuery] decimal amount,
+        [FromQuery] PaymentFrequency frequency,
+        [FromQuery] int? categoryId = null,
+        [FromQuery] int? dayOfMonth = null,
+        [FromQuery] int reminderDaysBefore = 3)
     {
         var r = await regularPaymentService.CreateAsync(userId, name, amount, frequency, categoryId, dayOfMonth, reminderDaysBefore);
-        return Ok(ToDto(r));
+        return Ok(RegularPaymentMapper.ToDto(r));
     }
 
-    // Оплатить
+    // === UPDATE ===
+
+    [HttpPut("{paymentId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Обновить", Description = "Имя, сумма, категория")]
+    public async Task<ActionResult<RegularPaymentDto>> Update(
+        long userId,
+        int paymentId,
+        [FromQuery] string name,
+        [FromQuery] decimal amount,
+        [FromQuery] int? categoryId = null)
+    {
+        var r = await regularPaymentService.UpdateAsync(userId, paymentId, name, amount, categoryId);
+        return r != null ? Ok(RegularPaymentMapper.ToDto(r)) : NotFound();
+    }
+
     [HttpPost("{paymentId}/user/{userId}/paid")]
+    [SwaggerOperation(Summary = "Оплатить", Description = "Пересчитывает следующую дату")]
     public async Task<ActionResult<RegularPaymentDto>> MarkAsPaid(long userId, int paymentId)
     {
         var r = await regularPaymentService.MarkAsPaidAsync(userId, paymentId);
-        return r != null ? Ok(ToDto(r)) : NotFound();
+        return r != null ? Ok(RegularPaymentMapper.ToDto(r)) : NotFound();
     }
 
-    // Пауза
     [HttpPut("{paymentId}/user/{userId}/pause")]
+    [SwaggerOperation(Summary = "Пауза/возобновить")]
     public async Task<ActionResult<RegularPaymentDto>> SetPaused(long userId, int paymentId, [FromQuery] bool isPaused)
     {
         var r = await regularPaymentService.SetPausedAsync(userId, paymentId, isPaused);
-        return r != null ? Ok(ToDto(r)) : NotFound();
+        return r != null ? Ok(RegularPaymentMapper.ToDto(r)) : NotFound();
     }
 
-    // Удалить
+    // === DELETE ===
+
     [HttpDelete("{paymentId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Удалить", Description = "Soft delete")]
     public async Task<ActionResult> Delete(long userId, int paymentId)
     {
         var result = await regularPaymentService.DeleteAsync(userId, paymentId);
-        return result ? Ok(new { Message = "Удалено" }) : NotFound();
+        return result ? Ok(new { Message = "Платёж удалён" }) : NotFound();
     }
 }

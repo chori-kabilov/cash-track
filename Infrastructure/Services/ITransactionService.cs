@@ -33,6 +33,13 @@ public interface ITransactionService
     Task<decimal> GetTotalIncomeAsync(long userId, DateTimeOffset? fromDateUtc = null, CancellationToken cancellationToken = default);
     Task<decimal> GetTotalExpenseAsync(long userId, DateTimeOffset? fromDateUtc = null, CancellationToken cancellationToken = default);
     Task<decimal> GetCategoryExpenseAsync(long userId, int categoryId, DateTimeOffset fromDateUtc, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<int>> GetRecentCategoryIdsAsync(long userId, TransactionType type, int limit = 6, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<(Category Category, decimal Amount)>> GetTopExpensesAsync(long userId, DateTimeOffset fromDate, int count, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<int>> GetRecentCategoryIdsAsync(long userId, TransactionType type, int limit = 6, CancellationToken ct = default);
+    Task<IReadOnlyList<(Category Category, decimal Amount)>> GetTopExpensesAsync(long userId, DateTimeOffset fromDate, int count, CancellationToken ct = default);
+    
+    // Новые методы
+    Task<Transaction?> GetByIdAsync(int id, CancellationToken ct = default);
+    Task<IReadOnlyList<Transaction>> GetByCategoryAsync(long userId, int categoryId, int limit = 50, CancellationToken ct = default);
+    Task<Transaction?> UpdateDescriptionAsync(int id, string? description, CancellationToken ct = default);
+    Task<Transaction?> CancelAsync(int id, CancellationToken ct = default);
+    Task<bool> DeleteAsync(int id, CancellationToken ct = default);
 }

@@ -1,56 +1,62 @@
 using Microsoft.AspNetCore.Mvc;
 using Infrastructure.Services;
+using Infrastructure.Mappers;
 using Domain.DTOs;
 using Domain.Enums;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace WebApi.Controllers;
 
 // Контроллер долгов
 [ApiController]
 [Route("api/debts")]
+[SwaggerTag("Управление долгами")]
 public class DebtsController(IDebtService debtService) : ControllerBase
 {
-    // Маппинг в DTO
-    private static DebtDto ToDto(Domain.Entities.Debt d) => new(
-        d.Id,
-        d.PersonName,
-        d.Amount,
-        d.RemainingAmount,
-        d.Type,
-        d.Type == DebtType.IOwe ? "Я должен" : "Мне должны",
-        d.Description,
-        d.TakenDate,
-        d.DueDate,
-        d.IsPaid,
-        d.DueDate.HasValue && d.DueDate < DateTimeOffset.UtcNow && !d.IsPaid
-    );
+    // === READ ===
 
-    // Получить все долги
     [HttpGet("user/{userId}")]
+    [SwaggerOperation(Summary = "Все долги")]
     public async Task<ActionResult<IEnumerable<DebtDto>>> GetByUser(long userId)
     {
         var debts = await debtService.GetUserDebtsAsync(userId);
-        return Ok(debts.Select(ToDto));
+        return Ok(debts.Select(DebtMapper.ToDto));
     }
 
-    // Неоплаченные
     [HttpGet("user/{userId}/unpaid")]
+    [SwaggerOperation(Summary = "Неоплаченные")]
     public async Task<ActionResult<IEnumerable<DebtDto>>> GetUnpaid(long userId)
     {
         var debts = await debtService.GetUnpaidDebtsAsync(userId);
-        return Ok(debts.Select(ToDto));
+        return Ok(debts.Select(DebtMapper.ToDto));
     }
 
-    // Просроченные
+    [HttpGet("user/{userId}/paid")]
+    [SwaggerOperation(Summary = "Оплаченные", Description = "История погашенных долгов")]
+    public async Task<ActionResult<IEnumerable<DebtDto>>> GetPaid(long userId)
+    {
+        var debts = await debtService.GetPaidDebtsAsync(userId);
+        return Ok(debts.Select(DebtMapper.ToDto));
+    }
+
     [HttpGet("user/{userId}/overdue")]
+    [SwaggerOperation(Summary = "Просроченные")]
     public async Task<ActionResult<IEnumerable<DebtDto>>> GetOverdue(long userId)
     {
         var debts = await debtService.GetOverdueDebtsAsync(userId);
-        return Ok(debts.Select(ToDto));
+        return Ok(debts.Select(DebtMapper.ToDto));
     }
 
-    // Сводка
+    [HttpGet("user/{userId}/type/{type}")]
+    [SwaggerOperation(Summary = "По типу", Description = "IOwe или TheyOwe")]
+    public async Task<ActionResult<IEnumerable<DebtDto>>> GetByType(long userId, DebtType type)
+    {
+        var debts = await debtService.GetByTypeAsync(userId, type);
+        return Ok(debts.Select(DebtMapper.ToDto));
+    }
+
     [HttpGet("user/{userId}/summary")]
+    [SwaggerOperation(Summary = "Сводка", Description = "Общие суммы и количество")]
     public async Task<ActionResult<DebtSummaryDto>> GetSummary(long userId)
     {
         var debts = await debtService.GetUnpaidDebtsAsync(userId);
@@ -65,43 +71,69 @@ public class DebtsController(IDebtService debtService) : ControllerBase
         ));
     }
 
-    // Получить по ID
     [HttpGet("{debtId}/user/{userId}")]
+    [SwaggerOperation(Summary = "По ID")]
     public async Task<ActionResult<DebtDto>> GetById(long userId, int debtId)
     {
         var d = await debtService.GetByIdAsync(userId, debtId);
-        return d != null ? Ok(ToDto(d)) : NotFound();
+        return d != null ? Ok(DebtMapper.ToDto(d)) : NotFound();
     }
 
-    // Создать
+    // === CREATE ===
+
     [HttpPost("user/{userId}")]
-    public async Task<ActionResult<DebtDto>> Create(long userId, [FromQuery] string personName, [FromQuery] decimal amount, [FromQuery] DebtType type, [FromQuery] string? description = null, [FromQuery] DateTimeOffset? dueDate = null)
+    [SwaggerOperation(Summary = "Создать долг")]
+    public async Task<ActionResult<DebtDto>> Create(
+        long userId,
+        [FromQuery] string personName,
+        [FromQuery] decimal amount,
+        [FromQuery] DebtType type,
+        [FromQuery] string? description = null,
+        [FromQuery] DateTimeOffset? dueDate = null)
     {
         var d = await debtService.CreateAsync(userId, personName, amount, type, description, dueDate);
-        return Ok(ToDto(d));
+        return Ok(DebtMapper.ToDto(d));
     }
 
-    // Платёж
+    // === UPDATE ===
+
+    [HttpPut("{debtId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Обновить", Description = "Имя, описание, срок")]
+    public async Task<ActionResult<DebtDto>> Update(
+        long userId,
+        int debtId,
+        [FromQuery] string personName,
+        [FromQuery] string? description = null,
+        [FromQuery] DateTimeOffset? dueDate = null)
+    {
+        var d = await debtService.UpdateAsync(userId, debtId, personName, description, dueDate);
+        return d != null ? Ok(DebtMapper.ToDto(d)) : NotFound();
+    }
+
     [HttpPost("{debtId}/user/{userId}/payment")]
+    [SwaggerOperation(Summary = "Частичный платёж")]
     public async Task<ActionResult<DebtDto>> MakePayment(long userId, int debtId, [FromQuery] decimal amount)
     {
+        if (amount <= 0) return BadRequest(new { Error = "Сумма должна быть > 0" });
         var d = await debtService.MakePaymentAsync(userId, debtId, amount);
-        return d != null ? Ok(ToDto(d)) : NotFound();
+        return d != null ? Ok(DebtMapper.ToDto(d)) : NotFound();
     }
 
-    // Оплатить
     [HttpPut("{debtId}/user/{userId}/paid")]
+    [SwaggerOperation(Summary = "Отметить оплаченным")]
     public async Task<ActionResult<DebtDto>> MarkAsPaid(long userId, int debtId)
     {
         var d = await debtService.MarkAsPaidAsync(userId, debtId);
-        return d != null ? Ok(ToDto(d)) : NotFound();
+        return d != null ? Ok(DebtMapper.ToDto(d)) : NotFound();
     }
 
-    // Удалить
+    // === DELETE ===
+
     [HttpDelete("{debtId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Удалить", Description = "Soft delete")]
     public async Task<ActionResult> Delete(long userId, int debtId)
     {
         var result = await debtService.DeleteAsync(userId, debtId);
-        return result ? Ok(new { Message = "Удалено" }) : NotFound();
+        return result ? Ok(new { Message = "Долг удалён" }) : NotFound();
     }
 }

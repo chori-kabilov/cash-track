@@ -110,4 +110,37 @@ public sealed class DebtService(DataContext context) : IDebtService
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    // Оплаченные
+    public async Task<IReadOnlyList<Debt>> GetPaidDebtsAsync(long userId, CancellationToken ct = default)
+    {
+        return await context.Debts.AsNoTracking()
+            .Where(d => d.UserId == userId && d.IsPaid && !d.IsDeleted)
+            .OrderByDescending(d => d.PaidAt)
+            .ToListAsync(ct);
+    }
+
+    // По типу
+    public async Task<IReadOnlyList<Debt>> GetByTypeAsync(long userId, DebtType type, CancellationToken ct = default)
+    {
+        return await context.Debts.AsNoTracking()
+            .Where(d => d.UserId == userId && d.Type == type && !d.IsDeleted)
+            .OrderBy(d => d.IsPaid)
+            .ThenBy(d => d.DueDate ?? DateTimeOffset.MaxValue)
+            .ToListAsync(ct);
+    }
+
+    // Обновить
+    public async Task<Debt?> UpdateAsync(long userId, int debtId, string personName, string? description, DateTimeOffset? dueDate, CancellationToken ct = default)
+    {
+        var debt = await context.Debts.FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId && !d.IsDeleted, ct);
+        if (debt == null) return null;
+
+        debt.PersonName = personName.Trim();
+        debt.Description = description?.Trim();
+        debt.DueDate = dueDate;
+        await context.SaveChangesAsync(ct);
+        return debt;
+    }
 }
+

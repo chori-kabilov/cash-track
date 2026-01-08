@@ -1,66 +1,69 @@
 using Microsoft.AspNetCore.Mvc;
 using Infrastructure.Services;
+using Infrastructure.Mappers;
 using Domain.DTOs;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace WebApi.Controllers;
 
 // Контроллер лимитов
 [ApiController]
 [Route("api/limits")]
+[SwaggerTag("Управление лимитами расходов")]
 public class LimitsController(ILimitService limitService) : ControllerBase
 {
-    // Маппинг в DTO
-    private static LimitDto ToDto(Domain.Entities.Limit l)
-    {
-        var percent = l.Amount > 0 ? Math.Round((double)(l.SpentAmount / l.Amount) * 100, 1) : 0;
-        var status = percent >= 100 ? "Превышен" : percent >= 80 ? "Предупреждение" : percent >= 50 ? "Внимание" : "OK";
-        
-        return new LimitDto(
-            l.Id,
-            l.Amount,
-            l.SpentAmount,
-            l.Amount - l.SpentAmount,
-            percent,
-            status,
-            l.IsBlocked,
-            l.Category != null ? new CategoryDto(l.Category.Id, l.Category.Name, l.Category.Icon, l.Category.Type, l.Category.Priority, l.Category.IsActive) : null
-        );
-    }
+    // === READ ===
 
-    // Получить все
     [HttpGet("user/{userId}")]
+    [SwaggerOperation(Summary = "Все лимиты")]
     public async Task<ActionResult<IEnumerable<LimitDto>>> GetByUser(long userId)
     {
         var limits = await limitService.GetUserLimitsAsync(userId);
-        return Ok(limits.Select(ToDto));
+        return Ok(limits.Select(LimitMapper.ToDto));
     }
 
-    // По ID
+    [HttpGet("user/{userId}/exceeded")]
+    [SwaggerOperation(Summary = "Превышенные", Description = "SpentAmount >= Amount")]
+    public async Task<ActionResult<IEnumerable<LimitDto>>> GetExceeded(long userId)
+    {
+        var limits = await limitService.GetExceededAsync(userId);
+        return Ok(limits.Select(LimitMapper.ToDto));
+    }
+
+    [HttpGet("user/{userId}/blocked")]
+    [SwaggerOperation(Summary = "Заблокированные")]
+    public async Task<ActionResult<IEnumerable<LimitDto>>> GetBlocked(long userId)
+    {
+        var limits = await limitService.GetBlockedAsync(userId);
+        return Ok(limits.Select(LimitMapper.ToDto));
+    }
+
     [HttpGet("{limitId}/user/{userId}")]
+    [SwaggerOperation(Summary = "По ID")]
     public async Task<ActionResult<LimitDto>> GetById(long userId, int limitId)
     {
         var l = await limitService.GetByIdAsync(userId, limitId);
-        return l != null ? Ok(ToDto(l)) : NotFound();
+        return l != null ? Ok(LimitMapper.ToDto(l)) : NotFound();
     }
 
-    // По категории
     [HttpGet("category/{categoryId}/user/{userId}")]
+    [SwaggerOperation(Summary = "По категории")]
     public async Task<ActionResult<LimitDto>> GetByCategory(long userId, int categoryId)
     {
         var l = await limitService.GetByCategoryAsync(userId, categoryId);
-        return l != null ? Ok(ToDto(l)) : NotFound();
+        return l != null ? Ok(LimitMapper.ToDto(l)) : NotFound();
     }
 
-    // Заблокирована ли
     [HttpGet("category/{categoryId}/user/{userId}/blocked")]
+    [SwaggerOperation(Summary = "Проверка блокировки категории")]
     public async Task<ActionResult<object>> IsBlocked(long userId, int categoryId)
     {
         var isBlocked = await limitService.IsCategoryBlockedAsync(userId, categoryId);
         return Ok(new { CategoryId = categoryId, IsBlocked = isBlocked });
     }
 
-    // Сводка
     [HttpGet("user/{userId}/summary")]
+    [SwaggerOperation(Summary = "Сводка")]
     public async Task<ActionResult<LimitSummaryDto>> GetSummary(long userId)
     {
         var limits = await limitService.GetUserLimitsAsync(userId);
@@ -75,43 +78,65 @@ public class LimitsController(ILimitService limitService) : ControllerBase
         ));
     }
 
-    // Создать
+    // === CREATE ===
+
     [HttpPost("user/{userId}")]
+    [SwaggerOperation(Summary = "Создать лимит")]
     public async Task<ActionResult<LimitDto>> Create(long userId, [FromQuery] int categoryId, [FromQuery] decimal amount)
     {
         var l = await limitService.CreateAsync(userId, categoryId, amount);
-        return Ok(ToDto(l));
+        return Ok(LimitMapper.ToDto(l));
     }
 
-    // Добавить расход
+    // === UPDATE ===
+
+    [HttpPut("{limitId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Обновить сумму")]
+    public async Task<ActionResult<LimitDto>> UpdateAmount(long userId, int limitId, [FromQuery] decimal amount)
+    {
+        var l = await limitService.UpdateAmountAsync(userId, limitId, amount);
+        return l != null ? Ok(LimitMapper.ToDto(l)) : NotFound();
+    }
+
+    [HttpPut("{limitId}/user/{userId}/block")]
+    [SwaggerOperation(Summary = "Заблокировать", Description = "Вручную заблокировать лимит")]
+    public async Task<ActionResult<LimitDto>> Block(long userId, int limitId, [FromQuery] DateTimeOffset? until = null)
+    {
+        var l = await limitService.BlockAsync(userId, limitId, until);
+        return l != null ? Ok(LimitMapper.ToDto(l)) : NotFound();
+    }
+
     [HttpPost("category/{categoryId}/user/{userId}/spend")]
+    [SwaggerOperation(Summary = "Добавить расход", Description = "Увеличивает SpentAmount")]
     public async Task<ActionResult<object>> AddSpending(long userId, int categoryId, [FromQuery] decimal amount)
     {
         var (limit, warningLevel) = await limitService.AddSpendingAsync(userId, categoryId, amount);
-        return Ok(new { Limit = limit != null ? ToDto(limit) : null, WarningLevel = warningLevel });
+        return Ok(new { Limit = limit != null ? LimitMapper.ToDto(limit) : null, WarningLevel = warningLevel });
     }
 
-    // Сбросить
     [HttpPost("user/{userId}/reset")]
+    [SwaggerOperation(Summary = "Сбросить месячные лимиты")]
     public async Task<ActionResult> ResetMonthly(long userId)
     {
         await limitService.ResetMonthlyLimitsAsync(userId);
         return Ok(new { Message = "Лимиты сброшены" });
     }
 
-    // Разблокировать
     [HttpPost("user/{userId}/unblock-expired")]
+    [SwaggerOperation(Summary = "Разблокировать истёкшие")]
     public async Task<ActionResult> UnblockExpired(long userId)
     {
         await limitService.UnblockExpiredCategoriesAsync(userId);
         return Ok(new { Message = "Разблокировано" });
     }
 
-    // Удалить
+    // === DELETE ===
+
     [HttpDelete("{limitId}/user/{userId}")]
+    [SwaggerOperation(Summary = "Удалить", Description = "Soft delete")]
     public async Task<ActionResult> Delete(long userId, int limitId)
     {
         var result = await limitService.DeleteAsync(userId, limitId);
-        return result ? Ok(new { Message = "Удалено" }) : NotFound();
+        return result ? Ok(new { Message = "Лимит удалён" }) : NotFound();
     }
 }

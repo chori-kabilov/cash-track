@@ -156,4 +156,51 @@ public sealed class LimitService(DataContext context) : ILimitService
         await context.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    // Превышенные
+    public async Task<IReadOnlyList<Limit>> GetExceededAsync(long userId, CancellationToken ct = default)
+    {
+        return await context.Limits.AsNoTracking()
+            .Include(l => l.Category)
+            .Where(l => l.UserId == userId && l.SpentAmount >= l.Amount && !l.IsDeleted)
+            .OrderByDescending(l => l.SpentAmount)
+            .ToListAsync(ct);
+    }
+
+    // Заблокированные
+    public async Task<IReadOnlyList<Limit>> GetBlockedAsync(long userId, CancellationToken ct = default)
+    {
+        return await context.Limits.AsNoTracking()
+            .Include(l => l.Category)
+            .Where(l => l.UserId == userId && l.IsBlocked && !l.IsDeleted)
+            .ToListAsync(ct);
+    }
+
+    // Обновить сумму
+    public async Task<Limit?> UpdateAmountAsync(long userId, int limitId, decimal amount, CancellationToken ct = default)
+    {
+        var limit = await context.Limits
+            .Include(l => l.Category)
+            .FirstOrDefaultAsync(l => l.Id == limitId && l.UserId == userId && !l.IsDeleted, ct);
+        if (limit == null) return null;
+
+        limit.Amount = amount;
+        await context.SaveChangesAsync(ct);
+        return limit;
+    }
+
+    // Заблокировать вручную
+    public async Task<Limit?> BlockAsync(long userId, int limitId, DateTimeOffset? until, CancellationToken ct = default)
+    {
+        var limit = await context.Limits
+            .Include(l => l.Category)
+            .FirstOrDefaultAsync(l => l.Id == limitId && l.UserId == userId && !l.IsDeleted, ct);
+        if (limit == null) return null;
+
+        limit.IsBlocked = true;
+        limit.BlockedUntil = until;
+        await context.SaveChangesAsync(ct);
+        return limit;
+    }
 }
+

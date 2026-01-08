@@ -108,5 +108,50 @@ public sealed class CategoryService(DataContext context) : ICategoryService
         context.Categories.AddRange(defaultCategories);
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    // Получить по типу
+    public async Task<IReadOnlyList<Category>> GetByTypeAsync(long userId, TransactionType type, CancellationToken ct = default)
+    {
+        return await context.Categories.AsNoTracking()
+            .Where(c => c.UserId == userId && c.Type == type && c.IsActive)
+            .OrderBy(c => c.Priority)
+            .ThenBy(c => c.Name)
+            .ToListAsync(ct);
+    }
+
+    // Обновить
+    public async Task<Category?> UpdateAsync(long userId, int categoryId, string name, string? icon, Priority priority, CancellationToken ct = default)
+    {
+        var category = await context.Categories.FirstOrDefaultAsync(c => c.Id == categoryId && c.UserId == userId, ct);
+        if (category == null) return null;
+
+        category.Name = name.Trim();
+        category.Icon = icon;
+        category.Priority = priority;
+        await context.SaveChangesAsync(ct);
+        return category;
+    }
+
+    // Архивировать
+    public async Task<Category?> ArchiveAsync(long userId, int categoryId, CancellationToken ct = default)
+    {
+        var category = await context.Categories.FirstOrDefaultAsync(c => c.Id == categoryId && c.UserId == userId && c.IsActive, ct);
+        if (category == null) return null;
+
+        category.IsActive = false;
+        await context.SaveChangesAsync(ct);
+        return category;
+    }
+
+    // Восстановить
+    public async Task<Category?> RestoreAsync(long userId, int categoryId, CancellationToken ct = default)
+    {
+        var category = await context.Categories.FirstOrDefaultAsync(c => c.Id == categoryId && c.UserId == userId && !c.IsActive, ct);
+        if (category == null) return null;
+
+        category.IsActive = true;
+        await context.SaveChangesAsync(ct);
+        return category;
+    }
 }
 
