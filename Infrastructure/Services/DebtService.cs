@@ -11,7 +11,7 @@ public sealed class DebtService(DataContext context) : IDebtService
     {
         return await context.Debts
             .AsNoTracking()
-            .Where(d => d.UserId == userId)
+            .Where(d => d.UserId == userId && !d.IsDeleted)
             .OrderBy(d => d.IsPaid)
             .ThenBy(d => d.DueDate ?? DateTimeOffset.MaxValue)
             .ThenByDescending(d => d.CreatedAt)
@@ -22,7 +22,7 @@ public sealed class DebtService(DataContext context) : IDebtService
     {
         return await context.Debts
             .AsNoTracking()
-            .Where(d => d.UserId == userId && !d.IsPaid)
+            .Where(d => d.UserId == userId && !d.IsPaid && !d.IsDeleted)
             .OrderBy(d => d.DueDate ?? DateTimeOffset.MaxValue)
             .ToListAsync(cancellationToken);
     }
@@ -32,7 +32,7 @@ public sealed class DebtService(DataContext context) : IDebtService
         var now = DateTimeOffset.UtcNow;
         return await context.Debts
             .AsNoTracking()
-            .Where(d => d.UserId == userId && !d.IsPaid && d.DueDate != null && d.DueDate < now)
+            .Where(d => d.UserId == userId && !d.IsPaid && !d.IsDeleted && d.DueDate != null && d.DueDate < now)
             .OrderBy(d => d.DueDate)
             .ToListAsync(cancellationToken);
     }
@@ -41,7 +41,7 @@ public sealed class DebtService(DataContext context) : IDebtService
     {
         return await context.Debts
             .AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId && !d.IsDeleted, cancellationToken);
     }
 
     public async Task<Debt> CreateAsync(long userId, string personName, decimal amount, DebtType type,
@@ -68,7 +68,7 @@ public sealed class DebtService(DataContext context) : IDebtService
 
     public async Task<Debt?> MakePaymentAsync(long userId, int debtId, decimal amount, CancellationToken cancellationToken = default)
     {
-        var debt = await context.Debts.FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId, cancellationToken);
+        var debt = await context.Debts.FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId && !d.IsDeleted, cancellationToken);
         if (debt == null)
             return null;
 
@@ -86,7 +86,7 @@ public sealed class DebtService(DataContext context) : IDebtService
 
     public async Task<Debt?> MarkAsPaidAsync(long userId, int debtId, CancellationToken cancellationToken = default)
     {
-        var debt = await context.Debts.FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId, cancellationToken);
+        var debt = await context.Debts.FirstOrDefaultAsync(d => d.Id == debtId && d.UserId == userId && !d.IsDeleted, cancellationToken);
         if (debt == null)
             return null;
 

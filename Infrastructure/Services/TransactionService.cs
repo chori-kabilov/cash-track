@@ -43,7 +43,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
         return await context.Transactions
             .AsNoTracking()
             .Include(t => t.Category)
-            .Where(t => t.Account.UserId == userId)
+            .Where(t => t.Account.UserId == userId && !t.IsDeleted)
             .OrderByDescending(t => t.Date)
             .Take(limit)
             .ToListAsync(cancellationToken);
@@ -54,7 +54,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
         var query = context.Transactions
             .AsNoTracking()
             .Include(t => t.Category)
-            .Where(t => t.Account.UserId == userId);
+            .Where(t => t.Account.UserId == userId && !t.IsDeleted);
 
         if (type.HasValue)
         {
@@ -91,7 +91,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
         return await context.Transactions
             .AsNoTracking()
             .Include(t => t.Category)
-            .Where(t => t.Account.UserId == userId)
+            .Where(t => t.Account.UserId == userId && !t.IsDeleted)
             .OrderByDescending(t => t.Date)
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -100,7 +100,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
     {
         var query = context.Transactions
             .AsNoTracking()
-            .Where(t => t.Account.UserId == userId && t.Type == TransactionType.Income);
+            .Where(t => t.Account.UserId == userId && t.Type == TransactionType.Income && !t.IsDeleted);
 
         if (fromDateUtc.HasValue)
         {
@@ -115,7 +115,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
     {
         var query = context.Transactions
             .AsNoTracking()
-            .Where(t => t.Account.UserId == userId && t.Type == TransactionType.Expense);
+            .Where(t => t.Account.UserId == userId && t.Type == TransactionType.Expense && !t.IsDeleted);
 
         if (fromDateUtc.HasValue)
         {
@@ -131,7 +131,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
         var utc = fromDateUtc.ToUniversalTime();
         return await context.Transactions
             .AsNoTracking()
-            .Where(t => t.Account.UserId == userId && t.CategoryId == categoryId && t.Type == TransactionType.Expense && t.Date >= utc)
+            .Where(t => t.Account.UserId == userId && t.CategoryId == categoryId && t.Type == TransactionType.Expense && !t.IsDeleted && t.Date >= utc)
             .SumAsync(t => t.Amount, cancellationToken);
     }
 
@@ -139,7 +139,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
     {
         return await context.Transactions
             .AsNoTracking()
-            .Where(t => t.Account.UserId == userId && t.Type == type)
+            .Where(t => t.Account.UserId == userId && t.Type == type && !t.IsDeleted)
             .GroupBy(t => t.CategoryId)
             .Select(g => new { CategoryId = g.Key, LastDate = g.Max(x => x.Date) })
             .OrderByDescending(x => x.LastDate)
@@ -151,7 +151,7 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
     {
         var grouped = await context.Transactions
             .AsNoTracking()
-            .Where(t => t.Account.UserId == userId && t.Date >= fromDate && t.Type == TransactionType.Expense)
+            .Where(t => t.Account.UserId == userId && t.Date >= fromDate && t.Type == TransactionType.Expense && !t.IsDeleted)
             .GroupBy(t => t.CategoryId)
             .Select(g => new { CategoryId = g.Key, Total = g.Sum(t => t.Amount) })
             .OrderByDescending(x => x.Total)

@@ -11,7 +11,7 @@ public sealed class LimitService(DataContext context) : ILimitService
         return await context.Limits
             .AsNoTracking()
             .Include(l => l.Category)
-            .Where(l => l.UserId == userId)
+            .Where(l => l.UserId == userId && !l.IsDeleted)
             .OrderBy(l => l.Category.Name)
             .ToListAsync(cancellationToken);
     }
@@ -20,7 +20,7 @@ public sealed class LimitService(DataContext context) : ILimitService
     {
         return await context.Limits
             .AsNoTracking()
-            .FirstOrDefaultAsync(l => l.UserId == userId && l.CategoryId == categoryId, cancellationToken);
+            .FirstOrDefaultAsync(l => l.UserId == userId && l.CategoryId == categoryId && !l.IsDeleted, cancellationToken);
     }
 
     public async Task<Limit?> GetByIdAsync(long userId, int limitId, CancellationToken cancellationToken = default)
@@ -28,7 +28,7 @@ public sealed class LimitService(DataContext context) : ILimitService
         return await context.Limits
             .AsNoTracking()
             .Include(l => l.Category)
-            .FirstOrDefaultAsync(l => l.Id == limitId && l.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(l => l.Id == limitId && l.UserId == userId && !l.IsDeleted, cancellationToken);
     }
 
     public async Task<Limit> CreateAsync(long userId, int categoryId, decimal amount, CancellationToken cancellationToken = default)
@@ -56,7 +56,7 @@ public sealed class LimitService(DataContext context) : ILimitService
 
     public async Task<(Limit? Limit, int WarningLevel)> AddSpendingAsync(long userId, int categoryId, decimal amount, CancellationToken cancellationToken = default)
     {
-        var limit = await context.Limits.FirstOrDefaultAsync(l => l.UserId == userId && l.CategoryId == categoryId, cancellationToken);
+        var limit = await context.Limits.FirstOrDefaultAsync(l => l.UserId == userId && l.CategoryId == categoryId && !l.IsDeleted, cancellationToken);
         if (limit == null)
             return (null, 0);
 
@@ -93,7 +93,7 @@ public sealed class LimitService(DataContext context) : ILimitService
     {
         var limit = await context.Limits
             .AsNoTracking()
-            .FirstOrDefaultAsync(l => l.UserId == userId && l.CategoryId == categoryId, cancellationToken);
+            .FirstOrDefaultAsync(l => l.UserId == userId && l.CategoryId == categoryId && !l.IsDeleted, cancellationToken);
 
         if (limit == null)
             return false;
@@ -113,8 +113,9 @@ public sealed class LimitService(DataContext context) : ILimitService
         var now = DateTimeOffset.UtcNow;
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset);
 
+        // Сбрасываем ВСЕ лимиты пользователя (для ручного сброса)
         var limits = await context.Limits
-            .Where(l => l.UserId == userId && l.Period == "month" && l.PeriodStart < monthStart)
+            .Where(l => l.UserId == userId && !l.IsDeleted)
             .ToListAsync(cancellationToken);
 
         foreach (var limit in limits)
@@ -133,7 +134,7 @@ public sealed class LimitService(DataContext context) : ILimitService
     {
         var now = DateTimeOffset.UtcNow;
         var expiredBlocks = await context.Limits
-            .Where(l => l.UserId == userId && l.IsBlocked && l.BlockedUntil != null && l.BlockedUntil <= now)
+            .Where(l => l.UserId == userId && l.IsBlocked && !l.IsDeleted && l.BlockedUntil != null && l.BlockedUntil <= now)
             .ToListAsync(cancellationToken);
 
         foreach (var limit in expiredBlocks)
@@ -147,7 +148,7 @@ public sealed class LimitService(DataContext context) : ILimitService
 
     public async Task<bool> DeleteAsync(long userId, int limitId, CancellationToken cancellationToken = default)
     {
-        var limit = await context.Limits.FirstOrDefaultAsync(l => l.Id == limitId && l.UserId == userId, cancellationToken);
+        var limit = await context.Limits.FirstOrDefaultAsync(l => l.Id == limitId && l.UserId == userId && !l.IsDeleted, cancellationToken);
         if (limit == null)
             return false;
 

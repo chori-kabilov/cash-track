@@ -10,7 +10,7 @@ public sealed class GoalService(DataContext context) : IGoalService
     {
         return await context.Goals
             .AsNoTracking()
-            .Where(g => g.UserId == userId && !g.IsCompleted)
+            .Where(g => g.UserId == userId && !g.IsCompleted && !g.IsDeleted)
             .OrderByDescending(g => g.IsActive)
             .ThenBy(g => g.Priority)
             .ThenBy(g => g.CreatedAt)
@@ -21,20 +21,20 @@ public sealed class GoalService(DataContext context) : IGoalService
     {
         return await context.Goals
             .AsNoTracking()
-            .FirstOrDefaultAsync(g => g.UserId == userId && g.IsActive && !g.IsCompleted, cancellationToken);
+            .FirstOrDefaultAsync(g => g.UserId == userId && g.IsActive && !g.IsCompleted && !g.IsDeleted, cancellationToken);
     }
 
     public async Task<Goal?> GetByIdAsync(long userId, int goalId, CancellationToken cancellationToken = default)
     {
         return await context.Goals
             .AsNoTracking()
-            .FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, cancellationToken);
     }
 
     public async Task<Goal> CreateAsync(long userId, string name, decimal targetAmount, DateTimeOffset? deadline = null, CancellationToken cancellationToken = default)
     {
         // If this is the first goal, make it active
-        var hasActiveGoal = await context.Goals.AnyAsync(g => g.UserId == userId && g.IsActive && !g.IsCompleted, cancellationToken);
+        var hasActiveGoal = await context.Goals.AnyAsync(g => g.UserId == userId && g.IsActive && !g.IsCompleted && !g.IsDeleted, cancellationToken);
 
         var goal = new Goal
         {
@@ -56,7 +56,7 @@ public sealed class GoalService(DataContext context) : IGoalService
 
     public async Task<Goal?> AddFundsAsync(long userId, int goalId, decimal amount, CancellationToken cancellationToken = default)
     {
-        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId, cancellationToken);
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, cancellationToken);
         if (goal == null)
             return null;
 
@@ -78,7 +78,7 @@ public sealed class GoalService(DataContext context) : IGoalService
     {
         // Deactivate all other goals
         var activeGoals = await context.Goals
-            .Where(g => g.UserId == userId && g.IsActive && !g.IsCompleted)
+            .Where(g => g.UserId == userId && g.IsActive && !g.IsCompleted && !g.IsDeleted)
             .ToListAsync(cancellationToken);
 
         foreach (var g in activeGoals)
@@ -87,7 +87,7 @@ public sealed class GoalService(DataContext context) : IGoalService
         }
 
         // Activate the selected goal
-        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId, cancellationToken);
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, cancellationToken);
         if (goal == null)
             return null;
 
@@ -98,7 +98,7 @@ public sealed class GoalService(DataContext context) : IGoalService
 
     public async Task<Goal?> CompleteAsync(long userId, int goalId, CancellationToken cancellationToken = default)
     {
-        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId, cancellationToken);
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, cancellationToken);
         if (goal == null)
             return null;
 
@@ -112,7 +112,7 @@ public sealed class GoalService(DataContext context) : IGoalService
 
     public async Task<bool> DeleteAsync(long userId, int goalId, CancellationToken cancellationToken = default)
     {
-        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId, cancellationToken);
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, cancellationToken);
         if (goal == null)
             return false;
 

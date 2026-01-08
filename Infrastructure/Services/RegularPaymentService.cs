@@ -12,7 +12,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
         return await context.RegularPayments
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.UserId == userId)
+            .Where(p => p.UserId == userId && !p.IsDeleted)
             .OrderBy(p => p.NextDueDate ?? DateTimeOffset.MaxValue)
             .ToListAsync(cancellationToken);
     }
@@ -23,7 +23,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
         return await context.RegularPayments
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.UserId == userId && !p.IsPaused && p.NextDueDate != null)
+            .Where(p => p.UserId == userId && !p.IsPaused && !p.IsDeleted && p.NextDueDate != null)
             .ToListAsync(cancellationToken)
             .ContinueWith(t => t.Result
                 .Where(p => p.NextDueDate!.Value.AddDays(-p.ReminderDaysBefore) <= now)
@@ -36,7 +36,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
         return await context.RegularPayments
             .AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.UserId == userId && !p.IsPaused && p.NextDueDate != null && p.NextDueDate < now)
+            .Where(p => p.UserId == userId && !p.IsPaused && !p.IsDeleted && p.NextDueDate != null && p.NextDueDate < now)
             .OrderBy(p => p.NextDueDate)
             .ToListAsync(cancellationToken);
     }
@@ -46,7 +46,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
         return await context.RegularPayments
             .AsNoTracking()
             .Include(p => p.Category)
-            .FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId && !p.IsDeleted, cancellationToken);
     }
 
     public async Task<RegularPayment> CreateAsync(long userId, string name, decimal amount, PaymentFrequency frequency,
@@ -78,7 +78,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
 
     public async Task<RegularPayment?> MarkAsPaidAsync(long userId, int paymentId, CancellationToken cancellationToken = default)
     {
-        var payment = await context.RegularPayments.FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId, cancellationToken);
+        var payment = await context.RegularPayments.FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId && !p.IsDeleted, cancellationToken);
         if (payment == null)
             return null;
 
@@ -92,7 +92,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
 
     public async Task<RegularPayment?> SetPausedAsync(long userId, int paymentId, bool isPaused, CancellationToken cancellationToken = default)
     {
-        var payment = await context.RegularPayments.FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId, cancellationToken);
+        var payment = await context.RegularPayments.FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId && !p.IsDeleted, cancellationToken);
         if (payment == null)
             return null;
 
@@ -103,7 +103,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
 
     public async Task<bool> DeleteAsync(long userId, int paymentId, CancellationToken cancellationToken = default)
     {
-        var payment = await context.RegularPayments.FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId, cancellationToken);
+        var payment = await context.RegularPayments.FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId && !p.IsDeleted, cancellationToken);
         if (payment == null)
             return false;
 
