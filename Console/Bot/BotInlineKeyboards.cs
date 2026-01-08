@@ -1,5 +1,4 @@
 using Domain.Entities;
-using System.Linq;
 using Domain.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
@@ -53,11 +52,13 @@ public static class BotInlineKeyboards
             .Select(row => row.ToArray())
             .ToList();
 
-        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("➕ Своя категория", "cat:new") });
+        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("📥 Другое", "cat:new") });
         buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("Отмена", "action:cancel") });
 
         return new InlineKeyboardMarkup(buttons);
     }
+
+    // Для расходов — с опцией импульсивной покупки
     public static InlineKeyboardMarkup SkipDescription(bool isImpulsive)
     {
         var impulsiveText = isImpulsive ? "✅ На эмоциях" : "🛍️ На эмоциях";
@@ -71,5 +72,32 @@ public static class BotInlineKeyboards
                 },
                 new[] { InlineKeyboardButton.WithCallbackData("Отмена", "action:cancel") }
             });
+    }
+
+    // Для дохода — после записи предложить добавить описание
+    public static InlineKeyboardMarkup IncomeComplete(bool hasDescription)
+    {
+        if (hasDescription)
+        {
+            return new InlineKeyboardMarkup(
+                new[] { InlineKeyboardButton.WithCallbackData("✅ Готово", "income:done") });
+        }
+        
+        return new InlineKeyboardMarkup(
+            new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("📝 Описание", "income:add_desc"),
+                    InlineKeyboardButton.WithCallbackData("✅ Готово", "income:done")
+                }
+            });
+    }
+
+    // Ввод описания для дохода с кнопкой "Назад"
+    public static InlineKeyboardMarkup IncomeDescription()
+    {
+        return new InlineKeyboardMarkup(
+            new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "income:back") });
     }
 }

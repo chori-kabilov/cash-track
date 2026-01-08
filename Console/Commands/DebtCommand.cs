@@ -8,14 +8,17 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Console.Commands;
 
+// Команда для управления долгами с возможностью оплаты и удаления
 public class DebtCommand(IDebtService debtService)
 {
-    public async Task ShowMenuAsync(ITelegramBotClient botClient, long chatId, long userId, CancellationToken cancellationToken, int? messageId = null)
+    public async Task ShowMenuAsync(ITelegramBotClient botClient, long chatId, long userId, CancellationToken ct, int? messageId = null)
     {
-        var debts = await debtService.GetUserDebtsAsync(userId, cancellationToken);
+        var debts = await debtService.GetUserDebtsAsync(userId, ct);
         
         var sb = new StringBuilder();
         sb.AppendLine("🤝 *Долговая книга*\n");
+
+        var buttons = new List<InlineKeyboardButton[]>();
 
         if (!debts.Any())
         {
@@ -27,27 +30,34 @@ public class DebtCommand(IDebtService debtService)
             
             foreach (var d in activeDebts)
             {
-                var icon = d.Type == DebtType.IOwe ? "🔴 Должен" : "🟢 Мне должны";
-                var overdue = d.DueDate.HasValue && d.DueDate < DateTimeOffset.UtcNow ? "⚠️ *Просрочено* " : "";
+                var icon = d.Type == DebtType.IOwe ? "🔴" : "🟢";
+                var overdue = d.DueDate.HasValue && d.DueDate < DateTimeOffset.UtcNow ? "⚠️" : "";
                 var date = d.DueDate.HasValue ? $"до {d.DueDate:dd.MM}" : "";
+                var paid = d.Amount - d.RemainingAmount;
                 
                 sb.AppendLine($"{overdue}{icon} *{d.PersonName}*");
-                sb.AppendLine($"💰 {d.Amount - d.RemainingAmount:F2} / {d.Amount:F2} {date}");
-                sb.AppendLine($"/pay\\_debt\\_{d.Id}"); 
-                sb.AppendLine();
+                sb.AppendLine($"💰 {paid:F0} / {d.Amount:F0} {date}\n");
+
+                // Кнопки для каждого долга
+                buttons.Add(new[]
+                {
+                    InlineKeyboardButton.WithCallbackData($"💵 Оплатить", $"debt:pay:{d.Id}"),
+                    InlineKeyboardButton.WithCallbackData("✅ Закрыть", $"debt:close:{d.Id}"),
+                    InlineKeyboardButton.WithCallbackData("🗑️", $"debt:delete:{d.Id}")
+                });
             }
         }
 
-        var buttons = new InlineKeyboardMarkup(
-            new[]
-            {
-                new[] { InlineKeyboardButton.WithCallbackData("🔴 Я должен", "debt:create:i_owe"), InlineKeyboardButton.WithCallbackData("🟢 Мне должны", "debt:create:they_owe") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "action:cancel") }
-            });
+        buttons.Add(new[] 
+        { 
+            InlineKeyboardButton.WithCallbackData("🔴 Я должен", "debt:create:i_owe"), 
+            InlineKeyboardButton.WithCallbackData("🟢 Мне должны", "debt:create:they_owe") 
+        });
+        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "action:cancel") });
 
         if (messageId.HasValue)
-            await botClient.EditMessageTextAsync(chatId, messageId.Value, sb.ToString(), ParseMode.Markdown, replyMarkup: buttons, cancellationToken: cancellationToken);
+            await botClient.EditMessageTextAsync(chatId, messageId.Value, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
         else
-            await botClient.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, replyMarkup: buttons, cancellationToken: cancellationToken);
+            await botClient.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
     }
 }

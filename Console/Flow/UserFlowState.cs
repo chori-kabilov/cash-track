@@ -10,6 +10,8 @@ public sealed class UserFlowState
     public decimal PendingAmount { get; set; }
     public int? PendingCategoryId { get; set; }
     public bool PendingIsImpulsive { get; set; }
+    public string? PendingDescription { get; set; }
+    public int? PendingTransactionId { get; set; }
     
     public string? PendingGoalName { get; set; }
     public decimal PendingGoalTarget { get; set; }
@@ -24,4 +26,10 @@ public sealed class UserFlowState
     public string? PendingRegularName { get; set; }
     public decimal PendingRegularAmount { get; set; }
     public PaymentFrequency PendingRegularFrequency { get; set; }
+
+    public int? PendingLimitCategoryId { get; set; }
+    public int? PendingMessageId { get; set; }
+    
+    // Список сообщений для удаления (в порядке отправки)
+    public List<int> MessageIdsToDelete { get; set; } = new();
 }

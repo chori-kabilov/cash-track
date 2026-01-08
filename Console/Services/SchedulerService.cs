@@ -39,7 +39,7 @@ public class SchedulerService(ITelegramBotClient botClient, DbContextOptions<Dat
         var regularService = new RegularPaymentService(context);
         var debtService = new DebtService(context);
 
-        var userIds = await context.Users.Select(u => u.Id).ToListAsync(token);
+        var userIds = await context.Users.Where(u => !u.IsDeleted).Select(u => u.Id).ToListAsync(token);
 
         foreach (var userId in userIds)
         {

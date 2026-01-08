@@ -7,57 +7,68 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Console.Commands;
 
+// Команда для управления целями с возможностью пополнения и удаления
 public class GoalCommand(IGoalService goalService)
 {
-    public async Task ShowMenuAsync(ITelegramBotClient botClient, long chatId, long userId, CancellationToken cancellationToken, int? messageId = null)
+    public async Task ShowMenuAsync(ITelegramBotClient botClient, long chatId, long userId, CancellationToken ct, int? messageId = null)
     {
-        var goals = await goalService.GetUserGoalsAsync(userId, cancellationToken);
-        var activeGoal = await goalService.GetActiveGoalAsync(userId, cancellationToken);
+        var goals = await goalService.GetUserGoalsAsync(userId, ct);
+        var activeGoal = await goalService.GetActiveGoalAsync(userId, ct);
 
         var sb = new StringBuilder();
         sb.AppendLine("🎯 *Мои Цели*\n");
 
+        var buttons = new List<InlineKeyboardButton[]>();
+
         if (activeGoal != null)
         {
             var percent = activeGoal.TargetAmount > 0 ? (activeGoal.CurrentAmount / activeGoal.TargetAmount) * 100 : 0;
-            sb.AppendLine($"🌟 *Активная цель:* {activeGoal.Name}");
-            sb.AppendLine($"💰 {activeGoal.CurrentAmount:F2} / {activeGoal.TargetAmount:F2} ({percent:F1}%)");
+            sb.AppendLine($"🌟 *{activeGoal.Name}* (активная)");
+            sb.AppendLine($"💰 {activeGoal.CurrentAmount:F0} / {activeGoal.TargetAmount:F0} ({percent:F0}%)");
             if (activeGoal.Deadline.HasValue)
             {
                 var daysLeft = (activeGoal.Deadline.Value - DateTimeOffset.UtcNow).Days;
-                sb.AppendLine($"📅 Дедлайн: {activeGoal.Deadline:dd.MM.yyyy} (осталось {daysLeft} дн.)");
+                sb.AppendLine($"📅 до {activeGoal.Deadline:dd.MM.yyyy} ({daysLeft} дн.)");
             }
             sb.AppendLine();
+
+            // Кнопки для активной цели
+            buttons.Add(new[]
+            {
+                InlineKeyboardButton.WithCallbackData("💵 Пополнить", $"goal:deposit:{activeGoal.Id}"),
+                InlineKeyboardButton.WithCallbackData("✅ Завершить", $"goal:complete:{activeGoal.Id}"),
+                InlineKeyboardButton.WithCallbackData("🗑️", $"goal:delete:{activeGoal.Id}")
+            });
         }
         else
         {
-            sb.AppendLine("Нет активной цели. Выберите или создайте новую.\n");
+            sb.AppendLine("Нет активной цели.\n");
         }
 
-        if (goals.Any(g => !g.IsActive))
+        // Другие цели
+        var otherGoals = goals.Where(g => !g.IsActive).Take(3).ToList();
+        if (otherGoals.Any())
         {
             sb.AppendLine("*Другие цели:*");
-            foreach (var g in goals.Where(g => !g.IsActive))
+            foreach (var g in otherGoals)
             {
-                sb.AppendLine($"- {g.Name}: {g.CurrentAmount:F2} / {g.TargetAmount:F2}");
+                var p = g.TargetAmount > 0 ? (g.CurrentAmount / g.TargetAmount) * 100 : 0;
+                sb.AppendLine($"- {g.Name}: {p:F0}%");
+                
+                buttons.Add(new[]
+                {
+                    InlineKeyboardButton.WithCallbackData($"⭐ {g.Name}", $"goal:activate:{g.Id}"),
+                    InlineKeyboardButton.WithCallbackData("🗑️", $"goal:delete:{g.Id}")
+                });
             }
         }
 
-        var buttons = new List<InlineKeyboardButton[]>
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("➕ Создать цель", "goal:create") }
-        };
-
-        if (activeGoal != null)
-        {
-            buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("💵 Пополнить активную", $"goal:deposit:{activeGoal.Id}") });
-        }
-
+        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("➕ Создать цель", "goal:create") });
         buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "action:cancel") });
 
         if (messageId.HasValue)
-            await botClient.EditMessageTextAsync(chatId, messageId.Value, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: cancellationToken);
+            await botClient.EditMessageTextAsync(chatId, messageId.Value, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
         else
-            await botClient.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: cancellationToken);
+            await botClient.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
     }
 }

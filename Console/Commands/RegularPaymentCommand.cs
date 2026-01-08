@@ -8,14 +8,17 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Console.Commands;
 
+// Команда для управления регулярными платежами с возможностью паузы и удаления
 public class RegularPaymentCommand(IRegularPaymentService regularPaymentService)
 {
-    public async Task ShowMenuAsync(ITelegramBotClient botClient, long chatId, long userId, CancellationToken cancellationToken, int? messageId = null)
+    public async Task ShowMenuAsync(ITelegramBotClient botClient, long chatId, long userId, CancellationToken ct, int? messageId = null)
     {
-        var payments = await regularPaymentService.GetUserPaymentsAsync(userId, cancellationToken);
+        var payments = await regularPaymentService.GetUserPaymentsAsync(userId, ct);
         
         var sb = new StringBuilder();
         sb.AppendLine("🔄 *Регулярные платежи*\n");
+
+        var buttons = new List<InlineKeyboardButton[]>();
 
         if (!payments.Any())
         {
@@ -37,22 +40,28 @@ public class RegularPaymentCommand(IRegularPaymentService regularPaymentService)
                 };
 
                 sb.AppendLine($"{status} *{p.Name}* ({p.Amount:F2})");
-                sb.AppendLine($"🔁 {freq}, след: {nextDate}");
-                sb.AppendLine($"/pay\\_regular\\_{p.Id}");
-                sb.AppendLine();
+                sb.AppendLine($"🔁 {freq}, след: {nextDate}\n");
+
+                // Кнопки для каждого платежа
+                var pauseBtn = p.IsPaused 
+                    ? InlineKeyboardButton.WithCallbackData("▶️", $"regular:resume:{p.Id}")
+                    : InlineKeyboardButton.WithCallbackData("⏸️", $"regular:pause:{p.Id}");
+                
+                buttons.Add(new[]
+                {
+                    InlineKeyboardButton.WithCallbackData($"💳 {p.Name}", $"regular:pay:{p.Id}"),
+                    pauseBtn,
+                    InlineKeyboardButton.WithCallbackData("🗑️", $"regular:delete:{p.Id}")
+                });
             }
         }
 
-        var buttons = new InlineKeyboardMarkup(
-            new[]
-            {
-                new[] { InlineKeyboardButton.WithCallbackData("➕ Создать платеж", "regular:create") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "action:cancel") }
-            });
+        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("➕ Создать платеж", "regular:create") });
+        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "action:cancel") });
 
         if (messageId.HasValue)
-            await botClient.EditMessageTextAsync(chatId, messageId.Value, sb.ToString(), ParseMode.Markdown, replyMarkup: buttons, cancellationToken: cancellationToken);
+            await botClient.EditMessageTextAsync(chatId, messageId.Value, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
         else
-            await botClient.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, replyMarkup: buttons, cancellationToken: cancellationToken);
+            await botClient.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
     }
 }

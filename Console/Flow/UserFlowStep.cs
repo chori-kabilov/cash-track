@@ -19,5 +19,8 @@ public enum UserFlowStep
     WaitingRegularName = 13,
     WaitingRegularAmount = 14,
     WaitingRegularFrequency = 15,
-    WaitingRegularDate = 16
+    WaitingRegularDate = 16,
+    WaitingLimitCategory = 17,
+    WaitingLimitAmount = 18,
+    WaitingIncomeDescription = 19
 }
