@@ -313,4 +313,16 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
         await context.SaveChangesAsync(ct);
         return true;
     }
+
+    // Получить расходы за период (для прогноза)
+    public async Task<IReadOnlyList<Transaction>> GetExpensesByPeriodAsync(long userId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
+    {
+        return await context.Transactions
+            .Where(t => t.Account!.UserId == userId 
+                && !t.IsDeleted 
+                && t.Type == TransactionType.Expense
+                && t.Date >= from 
+                && t.Date <= to)
+            .ToListAsync(ct);
+    }
 }

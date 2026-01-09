@@ -42,4 +42,5 @@ public interface ITransactionService
     Task<Transaction?> UpdateDescriptionAsync(int id, string? description, CancellationToken ct = default);
     Task<Transaction?> CancelAsync(int id, CancellationToken ct = default);
     Task<bool> DeleteAsync(int id, CancellationToken ct = default);
+    Task<IReadOnlyList<Transaction>> GetExpensesByPeriodAsync(long userId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default);
 }

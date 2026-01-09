@@ -8,6 +8,7 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.InputFiles;
 using Console.Bot;
 using Domain.Enums;
 using Console.Commands;
@@ -51,12 +52,12 @@ var regularService = new RegularPaymentService(db);
 // 4. ОБРАБОТЧИКИ КОМАНД
 var startCmd = new StartCommand(userService, categoryService);
 var helpCmd = new HelpCommand();
-var balanceCmd = new BalanceCommand(accountService);
-var statsCmd = new StatsCommand(accountService, transactionService, regularService);
+var balanceCmd = new BalanceCommand(accountService, goalService, debtService, regularService, transactionService);
+var limitService = new LimitService(db);
+var statsCmd = new StatsCommand(accountService, transactionService, categoryService, limitService, regularService);
 var goalCmd = new GoalCommand(goalService);
 var debtCmd = new DebtCommand(debtService);
 var regularCmd = new RegularPaymentCommand(regularService);
-var limitService = new LimitService(db);
 var limitCmd = new LimitCommand(limitService, categoryService);
 
 // 5. ОБРАБОТЧИК ДИАЛОГОВ
@@ -117,11 +118,6 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
         // Диалоговый поток (если пользователь в процессе ввода)
         if (_flow.TryGetValue(userId, out var flow))
         {
-            // Для дохода — добавляем сообщение пользователя в список на удаление
-            if (flow.PendingType == TransactionType.Income)
-            {
-                flow.MessageIdsToDelete.Add(msg.MessageId);
-            }
             await flowHandler.HandleAsync(botClient, chatId, userId, text, flow, _flow, ct);
             return;
         }
@@ -205,17 +201,11 @@ async Task HandleCallbackAsync(ITelegramBotClient botClient, CallbackQuery cb, C
         return;
     }
 
-    if (data == "action:toggle_impulsive" && _flow.TryGetValue(userId, out var impFlow) && impFlow.Step == UserFlowStep.WaitingDescription)
+    // Переключение флага "На эмоциях" для расхода
+    if (data == "action:toggle_impulsive" && _flow.TryGetValue(userId, out var impFlow) && impFlow.Step == UserFlowStep.WaitingAmount && impFlow.PendingType == TransactionType.Expense)
     {
         impFlow.PendingIsImpulsive = !impFlow.PendingIsImpulsive;
-        await botClient.EditMessageReplyMarkupAsync(chatId.Value, msgId!.Value, replyMarkup: BotInlineKeyboards.SkipDescription(impFlow.PendingIsImpulsive), cancellationToken: ct);
-        return;
-    }
-
-    // Добавить описание к доходу (опционально)
-    if (data == "action:add_income_desc" && _flow.TryGetValue(userId, out var incFlow) && incFlow.Step == UserFlowStep.WaitingIncomeDescription)
-    {
-        await botClient.SendTextMessageAsync(chatId.Value, "Введите описание:", replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: ct);
+        await botClient.EditMessageReplyMarkupAsync(chatId.Value, msgId!.Value, replyMarkup: BotInlineKeyboards.ExpenseStart(impFlow.PendingIsImpulsive), cancellationToken: ct);
         return;
     }
 
@@ -225,8 +215,16 @@ async Task HandleCallbackAsync(ITelegramBotClient botClient, CallbackQuery cb, C
     {
         switch (data)
         {
-            case "menu:balance": await balanceCmd.ExecuteAsync(botClient, chatId.Value, userId, ct, msgId); return;
-            case "menu:stats": await statsCmd.ExecuteAsync(botClient, chatId.Value, userId, ct, msgId); return;
+            case "menu:balance": 
+                _flow.TryGetValue(userId, out var balFlow);
+                if (balFlow == null) { balFlow = new UserFlowState(); _flow[userId] = balFlow; }
+                await balanceCmd.ExecuteAsync(botClient, chatId.Value, userId, balFlow, ct, msgId); 
+                return;
+            case "menu:stats": 
+                _flow.TryGetValue(userId, out var statFlow);
+                if (statFlow == null) { statFlow = new UserFlowState(); _flow[userId] = statFlow; }
+                await statsCmd.ExecuteAsync(botClient, chatId.Value, userId, statFlow, ct, msgId); 
+                return;
             case "menu:help": await helpCmd.ExecuteAsync(botClient, chatId.Value, ct, msgId); return;
             case "menu:goals": await goalCmd.ShowMenuAsync(botClient, chatId.Value, userId, ct, msgId); return;
             case "menu:debts": await debtCmd.ShowMenuAsync(botClient, chatId.Value, userId, ct, msgId); return;
@@ -235,12 +233,158 @@ async Task HandleCallbackAsync(ITelegramBotClient botClient, CallbackQuery cb, C
             case "menu:income":
                 _flow[userId] = new UserFlowState { Step = UserFlowStep.WaitingAmount, PendingType = TransactionType.Income, PendingMessageId = msgId };
                 await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, 
-                    "💵 *Доход*\n\nВведите сумму:\n_Можно добавить описание через пробел_\n_Пример: 5000 премия_", 
+                    "💵 *Доход*\n\nВведите сумму и описание через пробел:\n_Пример: 5000 премия_", 
                     ParseMode.Markdown, replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: ct);
                 return;
             case "menu:expense":
-                _flow[userId] = new UserFlowState { Step = UserFlowStep.WaitingAmount, PendingType = TransactionType.Expense };
-                await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, "💸 *Расход*\n\nВведите сумму:", ParseMode.Markdown, replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: ct);
+                _flow[userId] = new UserFlowState { Step = UserFlowStep.WaitingAmount, PendingType = TransactionType.Expense, PendingMessageId = msgId, PendingIsImpulsive = false };
+                await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, 
+                    "💸 *Расход*\n\nВведите сумму и описание через пробел:\n_Пример: 150 такси_", 
+                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.ExpenseStart(false), cancellationToken: ct);
+                return;
+        }
+    }
+
+    // === БАЛАНС: ПЕРЕКЛЮЧАТЕЛИ ===
+    
+    if (data.StartsWith("bal:toggle_") && _flow.TryGetValue(userId, out var toggleFlow))
+    {
+        switch (data)
+        {
+            case "bal:toggle_debts": toggleFlow.BalanceShowDebts = !toggleFlow.BalanceShowDebts; break;
+            case "bal:toggle_goals": toggleFlow.BalanceShowGoals = !toggleFlow.BalanceShowGoals; break;
+            case "bal:toggle_payments": toggleFlow.BalanceShowPayments = !toggleFlow.BalanceShowPayments; break;
+        }
+        await balanceCmd.ExecuteAsync(botClient, chatId.Value, userId, toggleFlow, ct, msgId);
+        return;
+    }
+    
+    if (data == "bal:back")
+    {
+        _flow.Remove(userId);
+        await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, "Выберите действие:", 
+            replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+        return;
+    }
+    
+    if (data == "bal:details" && _flow.TryGetValue(userId, out var detailFlow))
+    {
+        var transactions = await transactionService.GetUserTransactionsAsync(userId, 10, ct);
+        var lines = transactions.Select(t => 
+            $"{(t.Type == TransactionType.Income ? "+" : "-")}{t.Amount:F0} {t.Category?.Icon} {t.Description ?? t.Category?.Name}");
+        var text = "📊 *Последние операции:*\n\n" + string.Join("\n", lines);
+        
+        // Только кнопка "Назад" к балансу
+        await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, text,
+            ParseMode.Markdown, replyMarkup: BotInlineKeyboards.BalanceDetails(), cancellationToken: ct);
+        return;
+    }
+    
+    if (data == "bal:back_to_dashboard" && _flow.TryGetValue(userId, out var backDashFlow))
+    {
+        await balanceCmd.ExecuteAsync(botClient, chatId.Value, userId, backDashFlow, ct, msgId);
+        return;
+    }
+
+    // === СТАТИСТИКА: НАВИГАЦИЯ ===
+    
+    if (data.StartsWith("stat:") && _flow.TryGetValue(userId, out var sFlow))
+    {
+        switch (data)
+        {
+            case "stat:summary":
+                sFlow.CurrentStatsScreen = StatsScreen.Summary;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:categories":
+                sFlow.CurrentStatsScreen = StatsScreen.Categories;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:history":
+                sFlow.CurrentStatsScreen = StatsScreen.History;
+                sFlow.StatsPage = 1;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:emotions":
+                sFlow.CurrentStatsScreen = StatsScreen.Emotions;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:regular":
+                sFlow.CurrentStatsScreen = StatsScreen.Regular;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:period":
+                sFlow.CurrentStatsScreen = StatsScreen.PeriodSelect;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:prev":
+                sFlow.StatsDate = sFlow.StatsPeriod switch
+                {
+                    StatsPeriod.Week => sFlow.StatsDate.AddDays(-7),
+                    StatsPeriod.Month => sFlow.StatsDate.AddMonths(-1),
+                    StatsPeriod.Year => sFlow.StatsDate.AddYears(-1),
+                    _ => sFlow.StatsDate.AddMonths(-1)
+                };
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:next":
+                sFlow.StatsDate = sFlow.StatsPeriod switch
+                {
+                    StatsPeriod.Week => sFlow.StatsDate.AddDays(7),
+                    StatsPeriod.Month => sFlow.StatsDate.AddMonths(1),
+                    StatsPeriod.Year => sFlow.StatsDate.AddYears(1),
+                    _ => sFlow.StatsDate.AddMonths(1)
+                };
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:period:week":
+                sFlow.StatsPeriod = StatsPeriod.Week;
+                sFlow.CurrentStatsScreen = StatsScreen.Summary;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:period:month":
+                sFlow.StatsPeriod = StatsPeriod.Month;
+                sFlow.CurrentStatsScreen = StatsScreen.Summary;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:period:year":
+                sFlow.StatsPeriod = StatsPeriod.Year;
+                sFlow.CurrentStatsScreen = StatsScreen.Summary;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:cat:exp":
+                sFlow.StatsShowExpenses = true;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:cat:inc":
+                sFlow.StatsShowExpenses = false;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:page:prev":
+                if (sFlow.StatsPage > 1) sFlow.StatsPage--;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:page:next":
+                sFlow.StatsPage++;
+                await statsCmd.RenderCurrentScreenAsync(botClient, chatId.Value, userId, sFlow, ct, msgId);
+                return;
+            case "stat:back":
+                _flow.Remove(userId);
+                await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, "Выберите действие:",
+                    replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                return;
+            case "stat:export":
+                // CSV Export
+                var csv = await GenerateCsvAsync(userId, sFlow, transactionService, ct);
+                using (var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(csv)))
+                {
+                    var fileName = $"CashTrack_{sFlow.StatsDate:yyyy_MM}.csv";
+                    await botClient.SendDocumentAsync(chatId.Value, 
+                        new InputOnlineFile(stream, fileName), 
+                        caption: "📄 Ваш финансовый отчет", cancellationToken: ct);
+                }
+                return;
+            case "stat:noop":
                 return;
         }
     }
@@ -289,20 +433,17 @@ async Task HandleCallbackAsync(ITelegramBotClient botClient, CallbackQuery cb, C
 
     // ВЫБОР КАТЕГОРИИ
     
+    // "Другое" — редактируем сообщение для ввода названия
     if (data == "cat:new" && _flow.TryGetValue(userId, out var newCatFlow))
     {
-        // Добавляем сообщение с категориями в список на удаление
-        if (newCatFlow.PendingType == TransactionType.Income && newCatFlow.PendingMessageId.HasValue)
-        {
-            newCatFlow.MessageIdsToDelete.Add(newCatFlow.PendingMessageId.Value);
-        }
-        
-        newCatFlow.Step = UserFlowStep.ChoosingCategory; // Ожидаем название категории
-        var newMsg = await botClient.SendTextMessageAsync(chatId.Value, "✏️ Напишите название категории:", replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: ct);
-        newCatFlow.PendingMessageId = newMsg.MessageId;
+        newCatFlow.Step = UserFlowStep.WaitingNewCategory;
+        await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, 
+            "🆕 *Новый источник?*\n\nВведите название:", 
+            ParseMode.Markdown, replyMarkup: BotInlineKeyboards.NewCategoryInput(), cancellationToken: ct);
         return;
     }
 
+    // Выбор существующей категории — сразу записываем транзакцию
     if (data.StartsWith("cat:"))
     {
         var parts = data.Split(':');
@@ -310,99 +451,72 @@ async Task HandleCallbackAsync(ITelegramBotClient botClient, CallbackQuery cb, C
         {
             catFlow.PendingCategoryId = catId;
             
-            // Для дохода — добавить сообщение с категориями в список, записать и показать результат
-            if (catFlow.PendingType == TransactionType.Income)
+            // Записываем транзакцию и показываем результат
+            var (txnId, resultMsgId) = await flowHandler.AddTransactionAsync(botClient, chatId.Value, userId, catFlow, ct);
+            if (txnId.HasValue)
             {
-                // Добавляем сообщение с категориями в список на удаление
-                if (catFlow.PendingMessageId.HasValue)
-                {
-                    catFlow.MessageIdsToDelete.Add(catFlow.PendingMessageId.Value);
-                }
-                
-                var (txnId, incomeMsgId) = await flowHandler.AddIncomeAsync(botClient, chatId.Value, userId, catFlow.PendingAmount, catId, catFlow.PendingDescription, ct);
-                if (txnId.HasValue)
-                {
-                    catFlow.PendingTransactionId = txnId;
-                    catFlow.PendingMessageId = incomeMsgId;
-                    catFlow.Step = UserFlowStep.WaitingIncomeDescription;
-                }
-                else
-                {
-                    _flow.Remove(userId);
-                }
-                return;
+                catFlow.PendingTransactionId = txnId;
+                catFlow.PendingMessageId = resultMsgId;
+                catFlow.Step = UserFlowStep.None;
             }
-            
-            // Для расхода — старый flow с описанием и "на эмоциях"
-            catFlow.Step = UserFlowStep.WaitingDescription;
-            catFlow.PendingIsImpulsive = false;
-            await botClient.SendTextMessageAsync(chatId.Value, "Введите описание (или пропустить):", replyMarkup: BotInlineKeyboards.SkipDescription(false), cancellationToken: ct);
+            else
+            {
+                _flow.Remove(userId);
+            }
             return;
         }
         await SendMenuAsync(botClient, chatId.Value, ct);
     }
 
-    // === ДОХОД ===
+    // === НАВИГАЦИЯ "НАЗАД" ===
     
-    // Готово — удалить все сообщения по порядку и показать меню
-    if (data == "income:done" && _flow.TryGetValue(userId, out var doneFlow))
+    // Назад к вводу суммы (из категорий)
+    if (data == "back:amount" && _flow.TryGetValue(userId, out var backAmountFlow))
     {
-        // Добавляем последнее сообщение (результат) в конец списка
-        if (doneFlow.PendingMessageId.HasValue)
-        {
-            doneFlow.MessageIdsToDelete.Add(doneFlow.PendingMessageId.Value);
-        }
+        backAmountFlow.Step = UserFlowStep.WaitingAmount;
+        var keyboard = backAmountFlow.PendingType == TransactionType.Expense 
+            ? BotInlineKeyboards.ExpenseStart(backAmountFlow.PendingIsImpulsive) 
+            : BotInlineKeyboards.Cancel();
+        var emoji = backAmountFlow.PendingType == TransactionType.Expense ? "💸" : "💵";
+        var typeName = backAmountFlow.PendingType == TransactionType.Expense ? "Расход" : "Доход";
         
-        // Удаляем все сообщения в фоне по порядку (первое отправленное = первое удалённое)
-        var messagesToDelete = doneFlow.MessageIdsToDelete.ToList();
-        var chatIdCopy = chatId.Value;
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(10000); // Начальная задержка
-            for (int i = 0; i < messagesToDelete.Count; i++)
-            {
-                try { await botClient.DeleteMessageAsync(chatIdCopy, messagesToDelete[i]); } catch { }
-                if (i < messagesToDelete.Count - 1) await Task.Delay(1000); // 1 сек между удалениями
-            }
-        });
+        await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value,
+            $"{emoji} *{typeName}*\n\nВведите сумму и описание через пробел:",
+            ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+        return;
+    }
+    
+    // Назад к категориям (из ввода новой категории)
+    if (data == "back:categories" && _flow.TryGetValue(userId, out var backCatFlow))
+    {
+        backCatFlow.Step = UserFlowStep.ChoosingCategory;
+        var categories = await flowHandler.GetSuggestedCategoriesAsync(userId, backCatFlow.PendingType, ct);
+        var prompt = backCatFlow.PendingType == TransactionType.Income ? "Откуда доход?" : "Выберите категорию:";
         
+        await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, prompt,
+            replyMarkup: BotInlineKeyboards.CategoriesWithBack(categories, backCatFlow.PendingType), cancellationToken: ct);
+        return;
+    }
+    
+    // Готово — редактируем сообщение на главное меню
+    if (data == "txn:done" && _flow.TryGetValue(userId, out var doneFlow))
+    {
         _flow.Remove(userId);
-        await SendMenuAsync(botClient, chatId.Value, ct);
+        await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, "Выберите действие:", 
+            replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+        return;
+    }
+    
+    // Отмена транзакции — удаляем и редактируем на главное меню
+    if (data == "txn:cancel" && _flow.TryGetValue(userId, out var cancelFlow) && cancelFlow.PendingTransactionId.HasValue)
+    {
+        await transactionService.DeleteAsync(cancelFlow.PendingTransactionId.Value, ct);
+        _flow.Remove(userId);
+        await botClient.EditMessageTextAsync(chatId.Value, msgId!.Value, "❌ Транзакция отменена.\n\nВыберите действие:", 
+            replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
         return;
     }
 
-    // Добавить описание — изменить сообщение на ввод
-    if (data == "income:add_desc" && _flow.TryGetValue(userId, out var descFlow) && descFlow.Step == UserFlowStep.WaitingIncomeDescription)
-    {
-        if (descFlow.PendingMessageId.HasValue)
-        {
-            await botClient.EditMessageTextAsync(chatId.Value, descFlow.PendingMessageId.Value, 
-                "📝 Введите описание:", replyMarkup: BotInlineKeyboards.IncomeDescription(), cancellationToken: ct);
-        }
-        return;
-    }
-
-    // Назад — вернуть результат
-    if (data == "income:back" && _flow.TryGetValue(userId, out var backFlow) && backFlow.Step == UserFlowStep.WaitingIncomeDescription)
-    {
-        if (backFlow.PendingMessageId.HasValue && backFlow.PendingTransactionId.HasValue)
-        {
-            var txn = await transactionService.GetByIdAsync(backFlow.PendingTransactionId.Value, ct);
-            var account = await accountService.GetUserAccountAsync(userId, ct);
-            if (txn != null)
-            {
-                var cat = txn.Category;
-                var catName = cat != null ? $"{cat.Icon} {cat.Name}" : "";
-                var descText = !string.IsNullOrEmpty(txn.Description) ? $"\n📝 {txn.Description}" : "";
-                var balanceText = account?.Balance.ToString("F0") ?? "0";
-                
-                await botClient.EditMessageTextAsync(chatId.Value, backFlow.PendingMessageId.Value,
-                    $"✅ *Доход записан\\!*\n\n\\+{txn.Amount:F0} TJS\n📂 {EscapeMd(catName)}{EscapeMd(descText)}\n\n💰 Баланс: ||{balanceText} TJS||",
-                    ParseMode.MarkdownV2, replyMarkup: BotInlineKeyboards.IncomeComplete(!string.IsNullOrEmpty(txn.Description)), cancellationToken: ct);
-            }
-        }
-        return;
-    }
 
     // ЛИМИТЫ
     
@@ -535,10 +649,37 @@ async Task HandleCallbackAsync(ITelegramBotClient botClient, CallbackQuery cb, C
 Task SendMenuAsync(ITelegramBotClient botClient, long chatId, CancellationToken ct) =>
     botClient.SendTextMessageAsync(chatId, "Выберите действие:", replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
 
-// Escape для MarkdownV2
-string EscapeMd(string text) => 
-    text.Replace("_", "\\_").Replace("*", "\\*").Replace("[", "\\[").Replace("]", "\\]")
-        .Replace("(", "\\(").Replace(")", "\\)").Replace("~", "\\~").Replace("`", "\\`")
-        .Replace(">", "\\>").Replace("#", "\\#").Replace("+", "\\+").Replace("-", "\\-")
-        .Replace("=", "\\=").Replace("|", "\\|").Replace("{", "\\{").Replace("}", "\\}")
-        .Replace(".", "\\.").Replace("!", "\\!");
+// Генерация CSV для экспорта
+async Task<string> GenerateCsvAsync(long userId, UserFlowState flow, ITransactionService txnService, CancellationToken ct)
+{
+    var date = flow.StatsDate;
+    var from = flow.StatsPeriod switch
+    {
+        StatsPeriod.Week => date.AddDays(-(int)date.DayOfWeek + 1),
+        StatsPeriod.Month => new DateTimeOffset(date.Year, date.Month, 1, 0, 0, 0, date.Offset),
+        StatsPeriod.Year => new DateTimeOffset(date.Year, 1, 1, 0, 0, 0, date.Offset),
+        _ => date.AddDays(-30)
+    };
+    var to = flow.StatsPeriod switch
+    {
+        StatsPeriod.Week => date.AddDays(7 - (int)date.DayOfWeek),
+        StatsPeriod.Month => new DateTimeOffset(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month), 23, 59, 59, date.Offset),
+        StatsPeriod.Year => new DateTimeOffset(date.Year, 12, 31, 23, 59, 59, date.Offset),
+        _ => date
+    };
+
+    var transactions = await txnService.GetUserTransactionsAsync(userId, 1000, ct);
+    var filtered = transactions.Where(t => t.Date >= from && t.Date <= to).ToList();
+
+    var sb = new System.Text.StringBuilder();
+    sb.AppendLine("Дата,Тип,Категория,Сумма,Описание,На эмоциях");
+    foreach (var t in filtered)
+    {
+        var type = t.Type == TransactionType.Income ? "Доход" : "Расход";
+        var cat = t.Category?.Name ?? "";
+        var desc = t.Description?.Replace(",", " ") ?? "";
+        var emo = t.IsImpulsive ? "Да" : "Нет";
+        sb.AppendLine($"{t.Date:dd.MM.yyyy},{type},{cat},{t.Amount:F2},{desc},{emo}");
+    }
+    return sb.ToString();
+}

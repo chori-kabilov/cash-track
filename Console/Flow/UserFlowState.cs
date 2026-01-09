@@ -30,6 +30,15 @@ public sealed class UserFlowState
     public int? PendingLimitCategoryId { get; set; }
     public int? PendingMessageId { get; set; }
     
-    // Список сообщений для удаления (в порядке отправки)
-    public List<int> MessageIdsToDelete { get; set; } = new();
+    // Баланс — состояния переключателей
+    public bool BalanceShowDebts { get; set; } = false;  // ВЫКЛ по умолчанию
+    public bool BalanceShowGoals { get; set; } = true;   // ВКЛ по умолчанию
+    public bool BalanceShowPayments { get; set; } = true; // ВКЛ по умолчанию
+    
+    // Статистика — состояние навигации
+    public DateTimeOffset StatsDate { get; set; } = DateTimeOffset.UtcNow;  // Текущая дата периода
+    public StatsPeriod StatsPeriod { get; set; } = StatsPeriod.Month;       // Неделя/Месяц/Год
+    public StatsScreen CurrentStatsScreen { get; set; } = StatsScreen.Summary;
+    public int StatsPage { get; set; } = 1;              // Пагинация истории
+    public bool StatsShowExpenses { get; set; } = true;  // Категории: расходы/доходы
 }

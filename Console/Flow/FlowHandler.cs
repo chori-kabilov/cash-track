@@ -114,9 +114,9 @@ public class FlowHandler(
             case UserFlowStep.WaitingLimitAmount:
                 return await HandleLimitAmountAsync(bot, chatId, userId, text, flow, flowDict, ct);
 
-            // === ДОХОД — ОПИСАНИЕ ===
-            case UserFlowStep.WaitingIncomeDescription:
-                return await HandleIncomeDescriptionAsync(bot, chatId, userId, text, flow, flowDict, ct);
+            // === НОВАЯ КАТЕГОРИЯ ===
+            case UserFlowStep.WaitingNewCategory:
+                return await HandleNewCategoryAsync(bot, chatId, userId, text, flow, ct);
 
             default:
                 return false;
@@ -139,19 +139,13 @@ public class FlowHandler(
         flow.PendingDescription = parts.Length > 1 ? parts[1].Trim() : null;
         flow.Step = UserFlowStep.ChoosingCategory;
 
-        // Для дохода — добавить сообщение в список на удаление
-        if (flow.PendingType == TransactionType.Income && flow.PendingMessageId.HasValue)
-        {
-            flow.MessageIdsToDelete.Add(flow.PendingMessageId.Value);
-        }
-
         var categories = await GetSuggestedCategoriesAsync(userId, flow.PendingType, ct);
         
         var prompt = flow.PendingType == TransactionType.Income ? "Откуда доход?" : "Выберите категорию:";
-        var catMsg = await bot.SendTextMessageAsync(chatId, prompt, 
-            replyMarkup: BotInlineKeyboards.Categories(categories, flow.PendingType), cancellationToken: ct);
         
-        // Сохраняем ID сообщения с категориями
+        // После ввода текста — ОТПРАВЛЯЕМ НОВОЕ сообщение (Принцип Диалоговой Последовательности)
+        var catMsg = await bot.SendTextMessageAsync(chatId, prompt, 
+            replyMarkup: BotInlineKeyboards.CategoriesWithBack(categories, flow.PendingType), cancellationToken: ct);
         flow.PendingMessageId = catMsg.MessageId;
         return true;
     }
@@ -163,29 +157,17 @@ public class FlowHandler(
 
         flow.PendingCategoryId = newCat.Id;
         
-        // Добавляем сообщение с запросом названия в список на удаление
-        if (flow.PendingMessageId.HasValue)
-        {
-            flow.MessageIdsToDelete.Add(flow.PendingMessageId.Value);
-        }
-
-        // Для дохода — сразу записываем и показываем результат
-        if (flow.PendingType == TransactionType.Income)
-        {
-            var (txnId, msgId) = await AddIncomeAsync(bot, chatId, userId, flow.PendingAmount, newCat.Id, flow.PendingDescription, ct);
-            if (txnId.HasValue)
-            {
-                flow.PendingTransactionId = txnId;
-                flow.PendingMessageId = msgId;
-                flow.Step = UserFlowStep.WaitingIncomeDescription;
-            }
-            return true;
-        }
+        // После ввода текста — ОТПРАВЛЯЕМ НОВОЕ сообщение (Принцип Диалоговой Последовательности)
+        // Очищаем PendingMessageId, чтобы AddTransactionAsync отправил новое сообщение
+        flow.PendingMessageId = null;
         
-        // Для расхода — старый flow с описанием
-        flow.Step = UserFlowStep.WaitingDescription;
-        await bot.SendTextMessageAsync(chatId, $"✅ Категория \"{name}\" создана!\nВведите описание:", 
-            replyMarkup: BotInlineKeyboards.SkipDescription(false), cancellationToken: ct);
+        var (txnId, msgId) = await AddTransactionAsync(bot, chatId, userId, flow, ct);
+        if (txnId.HasValue)
+        {
+            flow.PendingTransactionId = txnId;
+            flow.PendingMessageId = msgId;
+            flow.Step = UserFlowStep.None;
+        }
         return true;
     }
 
@@ -344,29 +326,83 @@ public class FlowHandler(
         }
     }
 
-    // Специальный метод для дохода — скрытый баланс, опциональное описание
-    // Возвращает (transactionId, messageId) для дальнейшей работы
-    public async Task<(int? TxnId, int? MsgId)> AddIncomeAsync(ITelegramBotClient bot, long chatId, long userId, decimal amount, int categoryId, string? description, CancellationToken ct)
+    // Унифицированный метод для записи транзакции из UserFlowState
+    // Возвращает (transactionId, messageId) для возможности отмены
+    public async Task<(int? TxnId, int? MsgId)> AddTransactionAsync(ITelegramBotClient bot, long chatId, long userId, UserFlowState flow, CancellationToken ct)
     {
         try
         {
-            var txn = await transactionService.ProcessTransactionAsync(userId, categoryId, amount, TransactionType.Income, description, false, null, ct);
+            var type = flow.PendingType;
+            var amount = flow.PendingAmount;
+            var categoryId = flow.PendingCategoryId!.Value;
+            var description = flow.PendingDescription;
+            var isImpulsive = flow.PendingIsImpulsive;
+
+            // Проверка блокировки категории для расходов
+            if (type == TransactionType.Expense)
+            {
+                var isBlocked = await limitService.IsCategoryBlockedAsync(userId, categoryId, ct);
+                if (isBlocked)
+                {
+                    var category = await categoryService.GetCategoryByIdAsync(userId, categoryId, ct);
+                    var catName = category != null ? $"{category.Icon} {category.Name}" : "категория";
+                    await bot.SendTextMessageAsync(chatId, 
+                        $"🔒 *Категория заблокирована!*\n\n{catName}\n\n_Лимит превышен. Расходы временно заблокированы._", 
+                        Telegram.Bot.Types.Enums.ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                    return (null, null);
+                }
+            }
+
+            var txn = await transactionService.ProcessTransactionAsync(userId, categoryId, amount, type, description, isImpulsive, null, ct);
             var account = await accountService.GetUserAccountAsync(userId, ct);
             var cat = await categoryService.GetCategoryByIdAsync(userId, categoryId, ct);
 
-            var catName = cat != null ? $"{cat.Icon} {cat.Name}" : "";
+            var sign = type == TransactionType.Income ? "+" : "-";
+            var emoji = type == TransactionType.Income ? "✅" : "🛍️";
+            var typeName = type == TransactionType.Income ? "Доход записан!" : "Расход записан!";
+            var catName2 = cat != null ? $"{cat.Icon} {cat.Name}" : "";
             var descText = !string.IsNullOrEmpty(description) ? $"\n📝 {description}" : "";
+            var impText = isImpulsive ? "\n🌪 На эмоциях" : "";
             
-            // Баланс скрыт спойлером (MarkdownV2)
+            // Обновляем лимит для расходов
+            var limitWarning = "";
+            if (type == TransactionType.Expense)
+            {
+                var (limit, warningLevel) = await limitService.AddSpendingAsync(userId, categoryId, amount, ct);
+                if (limit != null && warningLevel > 0)
+                {
+                    var percent = limit.Amount > 0 ? (limit.SpentAmount / limit.Amount) * 100 : 0;
+                    limitWarning = warningLevel switch
+                    {
+                        100 => $"\n\n🔴 *Лимит превышен!* ({percent:F0}%)\n_Категория заблокирована на 24 часа_",
+                        80 => $"\n\n⚠️ *Внимание!* Лимит на {percent:F0}%",
+                        50 => $"\n\n📊 Лимит на {percent:F0}%",
+                        _ => ""
+                    };
+                }
+            }
+            
             var balanceText = account?.Balance.ToString("F0") ?? "0";
 
-            var msg = await bot.SendTextMessageAsync(chatId,
-                $"✅ *Доход записан\\!*\n\n\\+{amount:F0} TJS\n📂 {EscapeMd(catName)}{EscapeMd(descText)}\n\n💰 Баланс: ||{balanceText} TJS||",
-                Telegram.Bot.Types.Enums.ParseMode.MarkdownV2, 
-                replyMarkup: BotInlineKeyboards.IncomeComplete(!string.IsNullOrEmpty(description)), 
-                cancellationToken: ct);
+            // После нажатия кнопки — РЕДАКТИРУЕМ сообщение (Принцип Диалоговой Последовательности)
+            var resultText = $"{emoji} *{typeName}*\n\n{sign}{amount:F0} TJS\n📂 {catName2}{descText}{impText}{limitWarning}\n\n💰 Баланс: ||{balanceText} TJS||";
             
-            return (txn.Id, msg.MessageId);
+            if (flow.PendingMessageId.HasValue)
+            {
+                await bot.EditMessageTextAsync(chatId, flow.PendingMessageId.Value, resultText,
+                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
+                    replyMarkup: BotInlineKeyboards.TransactionComplete(), 
+                    cancellationToken: ct);
+                return (txn.Id, flow.PendingMessageId);
+            }
+            else
+            {
+                var msg = await bot.SendTextMessageAsync(chatId, resultText,
+                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
+                    replyMarkup: BotInlineKeyboards.TransactionComplete(), 
+                    cancellationToken: ct);
+                return (txn.Id, msg.MessageId);
+            }
         }
         catch (Exception ex)
         {
@@ -447,46 +483,4 @@ public class FlowHandler(
         await bot.SendTextMessageAsync(chatId, $"✅ Лимит создан!\n\n{catName}: {amount:F0} / месяц", replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
         return true;
     }
-
-    // Обработка добавления описания к доходу (опционально)
-    private async Task<bool> HandleIncomeDescriptionAsync(ITelegramBotClient bot, long chatId, long userId, string text, UserFlowState flow, Dictionary<long, UserFlowState> flowDict, CancellationToken ct)
-    {
-        if (!flow.PendingTransactionId.HasValue)
-        {
-            flowDict.Remove(userId);
-            await bot.SendTextMessageAsync(chatId, "❌ Транзакция не найдена.", replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
-            return true;
-        }
-
-        // Обновляем описание
-        var updatedTxn = await transactionService.UpdateDescriptionAsync(flow.PendingTransactionId.Value, text.Trim(), ct);
-        
-        // Добавляем старое сообщение в список на удаление
-        if (flow.PendingMessageId.HasValue)
-        {
-            flow.MessageIdsToDelete.Add(flow.PendingMessageId.Value);
-        }
-
-        // Показываем итоговое сообщение
-        if (updatedTxn != null)
-        {
-            var account = await accountService.GetUserAccountAsync(userId, ct);
-            var cat = updatedTxn.Category;
-            var catName = cat != null ? $"{cat.Icon} {cat.Name}" : "";
-            var descText = !string.IsNullOrEmpty(updatedTxn.Description) ? $"\n📝 {updatedTxn.Description}" : "";
-            var balanceText = account?.Balance.ToString("F0") ?? "0";
-
-            var msg = await bot.SendTextMessageAsync(chatId,
-                $"✅ *Доход записан\\!*\n\n\\+{updatedTxn.Amount:F0} TJS\n📂 {EscapeMd(catName)}{EscapeMd(descText)}\n\n💰 Баланс: ||{balanceText} TJS||",
-                Telegram.Bot.Types.Enums.ParseMode.MarkdownV2, 
-                replyMarkup: BotInlineKeyboards.IncomeComplete(true), 
-                cancellationToken: ct);
-            
-            flow.PendingMessageId = msg.MessageId;
-        }
-        
-        return true;
-    }
 }
-
-

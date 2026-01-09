@@ -22,5 +22,5 @@ public enum UserFlowStep
     WaitingRegularDate = 16,
     WaitingLimitCategory = 17,
     WaitingLimitAmount = 18,
-    WaitingIncomeDescription = 19
+    WaitingNewCategory = 19 // Ввод названия новой категории
 }
