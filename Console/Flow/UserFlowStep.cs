@@ -21,11 +21,16 @@ public enum UserFlowStep
     WaitingDebtType = 15,
     WaitingDebtDeadline = 16,
     WaitingDebtPayment = 17,
-    WaitingRegularName = 18,
-    WaitingRegularAmount = 19,
-    WaitingRegularFrequency = 20,
-    WaitingRegularDate = 21,
-    WaitingLimitCategory = 22,
-    WaitingLimitAmount = 23,
-    WaitingNewCategory = 24
+    WaitingDebtDescription = 18,
+    WaitingDebtSelect = 19,
+    WaitingDebtEditName = 20,
+    WaitingDebtEditDeadline = 21,
+    WaitingDebtEditDesc = 22,
+    WaitingRegularName = 23,
+    WaitingRegularAmount = 24,
+    WaitingRegularFrequency = 25,
+    WaitingRegularDate = 26,
+    WaitingLimitCategory = 27,
+    WaitingLimitAmount = 28,
+    WaitingNewCategory = 29
 }

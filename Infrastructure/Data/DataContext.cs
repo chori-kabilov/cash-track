@@ -9,10 +9,10 @@ public class DataContext(DbContextOptions<DataContext> options) : DbContext(opti
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
-
     public DbSet<ReminderSetting> ReminderSettings => Set<ReminderSetting>();
     public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<Debt> Debts => Set<Debt>();
+    public DbSet<DebtPayment> DebtPayments => Set<DebtPayment>();
     public DbSet<RegularPayment> RegularPayments => Set<RegularPayment>();
     public DbSet<Limit> Limits => Set<Limit>();
 }

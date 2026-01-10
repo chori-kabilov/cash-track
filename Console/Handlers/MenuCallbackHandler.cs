@@ -48,7 +48,7 @@ public class MenuCallbackHandler(
                 return true;
 
             case "menu:debts":
-                await debtCmd.ShowMenuAsync(bot, chatId, userId, ct, msgId);
+                await debtCmd.ExecuteAsync(bot, chatId, userId, ct, msgId);
                 return true;
 
             case "menu:regular":

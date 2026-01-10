@@ -20,8 +20,11 @@ public sealed class UserFlowState
 
     public string? PendingDebtName { get; set; }
     public decimal PendingDebtAmount { get; set; }
-    public DebtType PendingDebtType { get; set; }
+    public DebtType? PendingDebtType { get; set; }
     public int? PendingDebtId { get; set; }
+    public DateTimeOffset? PendingDebtDeadline { get; set; }
+    public string? PendingDebtDescription { get; set; }
+    public bool? PendingAddToBalance { get; set; }
 
     public string? PendingRegularName { get; set; }
     public decimal PendingRegularAmount { get; set; }
