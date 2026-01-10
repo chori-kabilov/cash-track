@@ -6,7 +6,7 @@ using Telegram.Bot.Types.Enums;
 
 namespace Console.Commands;
 
-// Команда "Баланс" — интерактивная панель управления капиталом
+// Панель управления балансом
 public class BalanceCommand(
     IAccountService accountService, 
     IGoalService goalService, 
@@ -14,7 +14,7 @@ public class BalanceCommand(
     IRegularPaymentService regularPaymentService,
     ITransactionService transactionService)
 {
-    // Показать dashboard с расчётом Free по переключателям
+    // Показать dashboard с расчётом свободных средств
     public async Task ExecuteAsync(
         ITelegramBotClient botClient, 
         long chatId, 
@@ -26,12 +26,11 @@ public class BalanceCommand(
         var account = await accountService.GetUserAccountAsync(userId, ct)
                       ?? await accountService.CreateAccountAsync(userId, ct: ct);
 
-        // Получаем данные для расчёта
         var goals = await goalService.GetUserGoalsAsync(userId, ct);
         var debts = await debtService.GetUnpaidDebtsAsync(userId, ct);
         var payments = await regularPaymentService.GetActiveAsync(userId, ct);
 
-        // Суммы
+        // Расчёт сумм
         decimal totalBalance = account.Balance;
         decimal goalsSavings = goals.Sum(g => g.CurrentAmount);
         decimal paymentsAmount = payments.Sum(p => p.Amount);
@@ -39,23 +38,22 @@ public class BalanceCommand(
         decimal debtsTheyOweMe = debts.Where(d => d.Type == Domain.Enums.DebtType.TheyOwe).Sum(d => d.RemainingAmount);
         decimal netDebt = debtsTheyOweMe - debtsIOweMoney;
 
-        // Состояния переключателей (берём из flowState или default)
+        // Состояния переключателей
         bool showDebts = flowState?.BalanceShowDebts ?? false;
         bool showGoals = flowState?.BalanceShowGoals ?? true;
         bool showPayments = flowState?.BalanceShowPayments ?? true;
 
-        // Расчёт "Свободно"
+        // Расчёт свободных средств
         decimal freeAmount = totalBalance;
         if (showGoals) freeAmount -= goalsSavings;
         if (showPayments) freeAmount -= paymentsAmount;
         if (showDebts) freeAmount += netDebt;
 
-        // Прогноз дней
+        // Прогноз на сколько дней хватит
         var avgExpense = await GetAverageDailyExpenseAsync(userId, ct);
         var daysRemaining = avgExpense > 0 ? (int)(freeAmount / avgExpense) : 999;
         var daysText = daysRemaining > 0 ? $"{daysRemaining} дней" : "< 1 дня";
 
-        // Формируем текст сообщения
         var freeEmoji = freeAmount < 0 ? "⚠️" : "💸";
         var freeColor = freeAmount < 0 ? "🔴" : "";
         
@@ -71,18 +69,12 @@ public class BalanceCommand(
         var keyboard = BotInlineKeyboards.BalanceDashboard(showDebts, showGoals, showPayments);
 
         if (messageId.HasValue)
-        {
-            await botClient.EditMessageTextAsync(chatId, messageId.Value, text,
-                parseMode: ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
-        }
+            await botClient.EditMessageTextAsync(chatId, messageId.Value, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
         else
-        {
-            await botClient.SendTextMessageAsync(chatId, text,
-                parseMode: ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
-        }
+            await botClient.SendTextMessageAsync(chatId, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
     }
 
-    // Средний расход в день (за последние 30 дней)
+    // Средний расход в день за последние 30 дней
     private async Task<decimal> GetAverageDailyExpenseAsync(long userId, CancellationToken ct)
     {
         var expenses = await transactionService.GetExpensesByPeriodAsync(userId, 
@@ -90,7 +82,6 @@ public class BalanceCommand(
         
         if (!expenses.Any()) return 0;
         
-        var totalExpense = expenses.Sum(e => e.Amount);
-        return totalExpense / 30;
+        return expenses.Sum(e => e.Amount) / 30;
     }
 }

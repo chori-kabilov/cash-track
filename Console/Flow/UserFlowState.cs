@@ -1,4 +1,4 @@
-﻿using Domain.Enums;
+using Domain.Enums;
 
 namespace Console.Flow;
 
@@ -41,4 +41,8 @@ public sealed class UserFlowState
     public StatsScreen CurrentStatsScreen { get; set; } = StatsScreen.Summary;
     public int StatsPage { get; set; } = 1;              // Пагинация истории
     public bool StatsShowExpenses { get; set; } = true;  // Категории: расходы/доходы
+    
+    // Цели — состояние хаба
+    public GoalScreen CurrentGoalScreen { get; set; } = GoalScreen.Main;    // Текущий экран
+    public int? OldGoalIdForTransfer { get; set; }  // ID старой цели при смене приоритета (для трансфера)
 }

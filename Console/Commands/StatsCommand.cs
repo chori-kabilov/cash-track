@@ -7,11 +7,9 @@ using Telegram.Bot.Types.Enums;
 
 namespace Console.Commands;
 
-// Команда "Статистика" — хаб с несколькими экранами
+// Хаб статистики с несколькими экранами
 public class StatsCommand(
-    IAccountService accountService,
     ITransactionService transactionService,
-    ICategoryService categoryService,
     ILimitService limitService,
     IRegularPaymentService regularPaymentService)
 {
