@@ -132,7 +132,7 @@ public sealed class GoalService(DataContext context) : IGoalService
             .ToListAsync(ct);
     }
 
-    // Обновить
+    // Обновить всё
     public async Task<Goal?> UpdateAsync(long userId, int goalId, string name, decimal targetAmount, DateTimeOffset? deadline, CancellationToken ct = default)
     {
         var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, ct);
@@ -140,6 +140,33 @@ public sealed class GoalService(DataContext context) : IGoalService
 
         goal.Name = name.Trim();
         goal.TargetAmount = targetAmount;
+        goal.Deadline = deadline;
+        await context.SaveChangesAsync(ct);
+        return goal;
+    }
+
+    public async Task<Goal?> UpdateNameAsync(long userId, int goalId, string name, CancellationToken ct = default)
+    {
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, ct);
+        if (goal == null) return null;
+        goal.Name = name.Trim();
+        await context.SaveChangesAsync(ct);
+        return goal;
+    }
+
+    public async Task<Goal?> UpdateTargetAsync(long userId, int goalId, decimal targetAmount, CancellationToken ct = default)
+    {
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, ct);
+        if (goal == null) return null;
+        goal.TargetAmount = targetAmount;
+        await context.SaveChangesAsync(ct);
+        return goal;
+    }
+
+    public async Task<Goal?> UpdateDeadlineAsync(long userId, int goalId, DateTimeOffset? deadline, CancellationToken ct = default)
+    {
+        var goal = await context.Goals.FirstOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsDeleted, ct);
+        if (goal == null) return null;
         goal.Deadline = deadline;
         await context.SaveChangesAsync(ct);
         return goal;

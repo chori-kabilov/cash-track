@@ -15,6 +15,9 @@ public interface IGoalService
     
     // UPDATE
     Task<Goal?> UpdateAsync(long userId, int goalId, string name, decimal targetAmount, DateTimeOffset? deadline, CancellationToken ct = default);
+    Task<Goal?> UpdateNameAsync(long userId, int goalId, string name, CancellationToken ct = default);
+    Task<Goal?> UpdateTargetAsync(long userId, int goalId, decimal targetAmount, CancellationToken ct = default);
+    Task<Goal?> UpdateDeadlineAsync(long userId, int goalId, DateTimeOffset? deadline, CancellationToken ct = default);
     Task<Goal?> AddFundsAsync(long userId, int goalId, decimal amount, CancellationToken ct = default);
     Task<Goal?> WithdrawAsync(long userId, int goalId, decimal amount, CancellationToken ct = default);
     Task<Goal?> SetActiveAsync(long userId, int goalId, CancellationToken ct = default);

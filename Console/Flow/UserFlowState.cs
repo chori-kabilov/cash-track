@@ -45,4 +45,5 @@ public sealed class UserFlowState
     // Цели — состояние хаба
     public GoalScreen CurrentGoalScreen { get; set; } = GoalScreen.Main;    // Текущий экран
     public int? OldGoalIdForTransfer { get; set; }  // ID старой цели при смене приоритета (для трансфера)
+    public int PendingListPage { get; set; } = 0;   // Страница пагинации списка целей
 }

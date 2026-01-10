@@ -46,19 +46,9 @@ public static class BotInlineKeyboards
 
     // Goal
     public static InlineKeyboardMarkup GoalMain() 
-        => GoalKeyboards.GoalMain();
-    public static InlineKeyboardMarkup GoalAmount(string prefix, decimal? freeBalance = null) 
-        => GoalKeyboards.GoalAmount(prefix, freeBalance);
-    public static InlineKeyboardMarkup GoalList(IReadOnlyList<Goal> goals, int currentMainId) 
-        => GoalKeyboards.GoalList(goals, currentMainId);
-    public static InlineKeyboardMarkup GoalTransfer(string newGoalName, decimal amount) 
-        => GoalKeyboards.GoalTransfer(newGoalName, amount);
-    public static InlineKeyboardMarkup GoalVictory(int goalId) 
-        => GoalKeyboards.GoalVictory(goalId);
-    public static InlineKeyboardMarkup GoalSettings(int goalId) 
-        => GoalKeyboards.GoalSettings(goalId);
+        => GoalKeyboards.MainKeyboard();
     public static InlineKeyboardMarkup GoalEmpty() 
-        => GoalKeyboards.GoalEmpty();
+        => GoalKeyboards.Empty();
     public static InlineKeyboardMarkup GoalCancel() 
-        => GoalKeyboards.GoalCancel();
+        => GoalKeyboards.Cancel();
 }

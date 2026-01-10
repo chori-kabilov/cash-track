@@ -1,150 +1,235 @@
-using Console.Bot;
+using Console.Bot.Keyboards;
 using Console.Commands;
 using Console.Flow;
-using Domain.Entities;
-using Domain.Enums;
 using Infrastructure.Services;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 
 namespace Console.Handlers;
 
+// Обработчик callback-кнопок для Целей (v3 — полные сценарии)
 public class GoalCallbackHandler(
     GoalCommand goalCmd,
-    IGoalService goalService,
-    IAccountService accountService,
-    ICategoryService categoryService,
-    TransactionFlowHandler transactionFlowHandler) : ICallbackHandler
+    IGoalService goalService) : ICallbackHandler
 {
-    public async Task<bool> HandleAsync(ITelegramBotClient bot, CallbackQuery cb, string data, UserFlowState? flow, Dictionary<long, UserFlowState> flowDict, CancellationToken ct)
+    public async Task<bool> HandleAsync(ITelegramBotClient bot, CallbackQuery cb, string data, 
+        UserFlowState? flow, Dictionary<long, UserFlowState> flowDict, CancellationToken ct)
     {
-        if (data == "goal:create")
-        {
-            flowDict[cb.From.Id] = new UserFlowState { Step = UserFlowStep.WaitingGoalName };
-            await bot.SendTextMessageAsync(cb.Message!.Chat.Id, "Введите название цели:", replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: ct);
-            return true;
-        }
-
         if (!data.StartsWith("goal:")) return false;
 
         var userId = cb.From.Id;
         var chatId = cb.Message!.Chat.Id;
         var msgId = cb.Message.MessageId;
 
-        // Инициализируем flow для навигации
         if (!flowDict.TryGetValue(userId, out var gFlow))
         {
             gFlow = new UserFlowState();
             flowDict[userId] = gFlow;
         }
 
+        // === НАВИГАЦИЯ ===
         switch (data)
         {
             case "goal:main":
-                gFlow.CurrentGoalScreen = GoalScreen.Main;
-                await goalCmd.RenderCurrentScreenAsync(bot, chatId, userId, gFlow, ct, msgId);
+                gFlow.Step = UserFlowStep.None;
+                await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct);
                 return true;
+
             case "goal:deposit":
-                gFlow.CurrentGoalScreen = GoalScreen.Deposit;
-                await goalCmd.RenderCurrentScreenAsync(bot, chatId, userId, gFlow, ct, msgId);
+                gFlow.Step = UserFlowStep.WaitingGoalDeposit;
+                var mainDep = await goalService.GetActiveGoalAsync(userId, ct);
+                gFlow.PendingGoalId = mainDep?.Id;
+                await goalCmd.ShowDepositAsync(bot, chatId, userId, msgId, ct);
                 return true;
+
             case "goal:withdraw":
-                gFlow.CurrentGoalScreen = GoalScreen.Withdraw;
-                await goalCmd.RenderCurrentScreenAsync(bot, chatId, userId, gFlow, ct, msgId);
+                gFlow.Step = UserFlowStep.WaitingGoalWithdraw;
+                var mainWd = await goalService.GetActiveGoalAsync(userId, ct);
+                gFlow.PendingGoalId = mainWd?.Id;
+                await goalCmd.ShowWithdrawAsync(bot, chatId, userId, msgId, ct);
                 return true;
-            case "goal:list":
-                gFlow.CurrentGoalScreen = GoalScreen.List;
-                await goalCmd.RenderCurrentScreenAsync(bot, chatId, userId, gFlow, ct, msgId);
-                return true;
+
             case "goal:settings":
-                gFlow.CurrentGoalScreen = GoalScreen.Settings;
-                await goalCmd.RenderCurrentScreenAsync(bot, chatId, userId, gFlow, ct, msgId);
+                gFlow.Step = UserFlowStep.None;
+                await goalCmd.ShowSettingsAsync(bot, chatId, userId, msgId, ct);
                 return true;
-            case "goal:transfer:yes":
-                await goalCmd.HandleTransferAsync(bot, chatId, userId, gFlow, true, ct, msgId);
+
+            case "goal:list":
+                gFlow.Step = UserFlowStep.WaitingGoalSelect;
+                gFlow.PendingListPage = 0;
+                await goalCmd.ShowListAsync(bot, chatId, userId, msgId, 0, ct);
                 return true;
-            case "goal:transfer:no":
-                await goalCmd.HandleTransferAsync(bot, chatId, userId, gFlow, false, ct, msgId);
+
+            case "goal:create":
+                gFlow.Step = UserFlowStep.WaitingGoalName;
+                await bot.EditMessageTextAsync(chatId, msgId, 
+                    "🎯 *Новая цель*\n\nВведите название:", 
+                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
+                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
                 return true;
+
+            case "goal:noop":
+                return true; // Ignore click
         }
 
-        // goal:add:100, goal:add:500, goal:add:1000, goal:add:all
+        // === ПАГИНАЦИЯ ===
+        if (data.StartsWith("goal:list:"))
+        {
+            if (int.TryParse(data.Split(':')[2], out var page))
+            {
+                gFlow.PendingListPage = page;
+                await goalCmd.ShowListAsync(bot, chatId, userId, msgId, page, ct);
+            }
+            return true;
+        }
+
+        // === ПОПОЛНЕНИЕ ===
         if (data.StartsWith("goal:add:"))
         {
             var amountStr = data.Split(':')[2];
-            decimal amount;
-            if (amountStr == "all")
+            if (decimal.TryParse(amountStr, out var amount) && amount > 0)
             {
-                var acc = await accountService.GetUserAccountAsync(userId, ct);
-                amount = acc?.Balance ?? 0;
+                gFlow.Step = UserFlowStep.None;
+                await goalCmd.DepositAsync(bot, chatId, userId, amount, msgId, ct);
             }
-            else
-            {
-                decimal.TryParse(amountStr, out amount);
-            }
-            if (amount > 0)
-                await goalCmd.HandleDepositAsync(bot, chatId, userId, gFlow, amount, ct, msgId);
             return true;
         }
 
-        // goal:take:100, goal:take:500, goal:take:1000, goal:take:all
+        // === СНЯТИЕ ===
         if (data.StartsWith("goal:take:"))
         {
             var amountStr = data.Split(':')[2];
-            decimal amount;
-            if (amountStr == "all")
+            if (decimal.TryParse(amountStr, out var amount) && amount > 0)
             {
-                var main = await goalService.GetActiveGoalAsync(userId, ct);
-                amount = main?.CurrentAmount ?? 0;
+                gFlow.Step = UserFlowStep.None;
+                await goalCmd.WithdrawAsync(bot, chatId, userId, amount, msgId, ct);
             }
-            else
-            {
-                decimal.TryParse(amountStr, out amount);
-            }
-            if (amount > 0)
-                await goalCmd.HandleWithdrawAsync(bot, chatId, userId, gFlow, amount, ct, msgId);
             return true;
         }
 
-        // goal:select:123 — выбор новой главной цели
+        // === ВЫБОР ЦЕЛИ ===
         if (data.StartsWith("goal:select:"))
         {
-            if (int.TryParse(data.Split(':')[2], out var newGoalId))
-                await goalCmd.HandleSelectGoalAsync(bot, chatId, userId, gFlow, newGoalId, ct, msgId);
-            return true;
-        }
-
-        // goal:bought:123 — цель достигнута, пользователь купил
-        if (data.StartsWith("goal:bought:"))
-        {
-            if (int.TryParse(data.Split(':')[2], out var boughtGoalId))
+            if (int.TryParse(data.Split(':')[2], out var goalId))
             {
-                var goal = await goalService.GetByIdAsync(userId, boughtGoalId, ct);
-                if (goal != null)
-                {
-                    // Создаем расход
-                    var cat = (await categoryService.GetUserCategoriesAsync(userId, ct))
-                        .FirstOrDefault(c => c.Type == TransactionType.Expense);
-                    if (cat != null)
-                        await transactionFlowHandler.AddTransactionWithDescriptionAsync(bot, chatId, userId, goal.CurrentAmount, cat.Id, TransactionType.Expense, $"Покупка: {goal.Name}", false, ct);
-                    
-                    // Завершаем цель
-                    await goalService.CompleteAsync(userId, boughtGoalId, ct);
-                }
-                gFlow.CurrentGoalScreen = GoalScreen.Main;
-                await goalCmd.RenderCurrentScreenAsync(bot, chatId, userId, gFlow, ct, msgId);
+                gFlow.Step = UserFlowStep.None;
+                await goalCmd.SelectGoalAsync(bot, chatId, userId, goalId, msgId, ct);
             }
             return true;
         }
 
-        // goal:delete:123 — удаление цели
-        if (data.StartsWith("goal:delete:"))
+        // === СДЕЛАТЬ ГЛАВНОЙ ===
+        if (data.StartsWith("goal:setmain:"))
         {
-            if (int.TryParse(data.Split(':')[2], out var delGoalId))
+            if (int.TryParse(data.Split(':')[2], out var goalId))
             {
-                await goalService.DeleteAsync(userId, delGoalId, ct);
-                gFlow.CurrentGoalScreen = GoalScreen.Main;
-                await goalCmd.RenderCurrentScreenAsync(bot, chatId, userId, gFlow, ct, msgId);
+                gFlow.Step = UserFlowStep.None;
+                await goalCmd.SetMainAsync(bot, chatId, userId, goalId, msgId, ct);
+            }
+            return true;
+        }
+
+        // === ПОБЕДА ===
+        if (data.StartsWith("goal:bought:"))
+        {
+            if (int.TryParse(data.Split(':')[2], out var goalId))
+                await goalCmd.BoughtAsync(bot, chatId, userId, goalId, msgId, ct);
+            return true;
+        }
+
+        if (data.StartsWith("goal:continue:"))
+        {
+            await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct);
+            return true;
+        }
+
+        // === ПЕРЕПОЛНЕНИЕ ===
+        if (data.StartsWith("goal:overflow:") && !data.Contains("keep") && !data.Contains("to"))
+        {
+            var amountStr = data.Split(':')[2];
+            if (decimal.TryParse(amountStr, out var amount))
+            {
+                gFlow.PendingAmount = amount;
+                await goalCmd.ShowOverflowTargetsAsync(bot, chatId, userId, amount, msgId, ct);
+            }
+            return true;
+        }
+
+        if (data.StartsWith("goal:overflow:keep:"))
+        {
+            gFlow.Step = UserFlowStep.None;
+            await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct);
+            return true;
+        }
+
+        if (data.StartsWith("goal:overflow:to:"))
+        {
+            var parts = data.Split(':');
+            if (parts.Length >= 5 && int.TryParse(parts[3], out var targetId) && decimal.TryParse(parts[4], out var amount))
+            {
+                await goalCmd.TransferOverflowAsync(bot, chatId, userId, targetId, amount, msgId, ct);
+            }
+            return true;
+        }
+
+        // === УДАЛЕНИЕ ===
+        if (data.StartsWith("goal:delete:") && !data.Contains("confirm"))
+        {
+            if (int.TryParse(data.Split(':')[2], out var goalId))
+                await goalCmd.ShowDeleteConfirmAsync(bot, chatId, userId, goalId, msgId, ct);
+            return true;
+        }
+
+        if (data.StartsWith("goal:delete:confirm:"))
+        {
+            if (int.TryParse(data.Split(':')[3], out var goalId))
+                await goalCmd.DeleteGoalAsync(bot, chatId, userId, goalId, msgId, ct);
+            return true;
+        }
+
+        // === РЕДАКТИРОВАНИЕ ===
+        if (data.StartsWith("goal:edit:name:"))
+        {
+            if (int.TryParse(data.Split(':')[3], out var goalId))
+            {
+                gFlow.Step = UserFlowStep.WaitingGoalEditName;
+                gFlow.PendingGoalId = goalId;
+                var goal = await goalService.GetByIdAsync(userId, goalId, ct);
+                await bot.EditMessageTextAsync(chatId, msgId, 
+                    $"✏️ *Новое название*\n\nТекущее: {goal?.Name}\n\nВведите новое название:", 
+                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
+                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
+            }
+            return true;
+        }
+
+        if (data.StartsWith("goal:edit:amount:"))
+        {
+            if (int.TryParse(data.Split(':')[3], out var goalId))
+            {
+                gFlow.Step = UserFlowStep.WaitingGoalEditAmount;
+                gFlow.PendingGoalId = goalId;
+                var goal = await goalService.GetByIdAsync(userId, goalId, ct);
+                await bot.EditMessageTextAsync(chatId, msgId, 
+                    $"💵 *Новая сумма*\n\nТекущая: {goal?.TargetAmount:N0} TJS\n\nВведите новую сумму:", 
+                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
+                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
+            }
+            return true;
+        }
+
+        if (data.StartsWith("goal:edit:deadline:"))
+        {
+            if (int.TryParse(data.Split(':')[3], out var goalId))
+            {
+                gFlow.Step = UserFlowStep.WaitingGoalEditDeadline;
+                gFlow.PendingGoalId = goalId;
+                var goal = await goalService.GetByIdAsync(userId, goalId, ct);
+                var current = goal?.Deadline.HasValue == true ? goal.Deadline.Value.ToString("dd.MM.yyyy") : "не установлен";
+                await bot.EditMessageTextAsync(chatId, msgId, 
+                    $"📅 *Новый дедлайн*\n\nТекущий: {current}\n\nВведите (ДД.ММ.ГГГГ) или «нет»:", 
+                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
+                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
             }
             return true;
         }

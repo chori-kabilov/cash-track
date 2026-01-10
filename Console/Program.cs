@@ -53,14 +53,14 @@ var startCmd = new StartCommand(userService, categoryService);
 var helpCmd = new HelpCommand();
 var balanceCmd = new BalanceCommand(accountService, goalService, debtService, regularService, transactionService);
 var statsCmd = new StatsCommand(transactionService, limitService, regularService);
-var goalCmd = new GoalCommand(goalService, accountService);
+var goalCmd = new GoalCommand(goalService, accountService, transactionService, categoryService);
 var debtCmd = new DebtCommand(debtService);
 var regularCmd = new RegularPaymentCommand(regularService);
 var limitCmd = new LimitCommand(limitService, categoryService);
 
 // 5. Обработчики диалогов (модульные)
 var transactionFlowHandler = new TransactionFlowHandler(categoryService, transactionService, accountService, limitService);
-var goalFlowHandler = new GoalFlowHandler(goalService, categoryService, transactionFlowHandler);
+var goalFlowHandler = new GoalFlowHandler(goalService, goalCmd);
 var debtFlowHandler = new DebtFlowHandler(debtService, categoryService, transactionFlowHandler);
 var regularFlowHandler = new RegularFlowHandler(regularService);
 var limitFlowHandler = new LimitFlowHandler(limitService, categoryService);
@@ -80,7 +80,7 @@ var callbackRouter = new CallbackRouter(new ICallbackHandler[]
     new MenuCallbackHandler(balanceCmd, statsCmd, goalCmd, debtCmd, regularCmd, limitCmd, helpCmd),
     new BalanceCallbackHandler(balanceCmd, transactionService),
     new StatCallbackHandler(statsCmd, transactionService),
-    new GoalCallbackHandler(goalCmd, goalService, accountService, categoryService, transactionFlowHandler),
+    new GoalCallbackHandler(goalCmd, goalService),
     new TransactionCallbackHandler(transactionFlowHandler, transactionService),
     new DebtCallbackHandler(debtService),
     new RegularCallbackHandler(regularCmd, regularService),
