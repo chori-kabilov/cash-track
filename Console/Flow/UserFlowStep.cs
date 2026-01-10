@@ -30,7 +30,12 @@ public enum UserFlowStep
     WaitingRegularAmount = 24,
     WaitingRegularFrequency = 25,
     WaitingRegularDate = 26,
-    WaitingLimitCategory = 27,
-    WaitingLimitAmount = 28,
-    WaitingNewCategory = 29
+    WaitingRegularSelect = 27,
+    WaitingRegularEditName = 28,
+    WaitingRegularEditAmount = 29,
+    WaitingRegularEditDay = 30,
+    WaitingRegularEditCat = 31,
+    WaitingLimitCategory = 32,
+    WaitingLimitAmount = 33,
+    WaitingNewCategory = 34
 }

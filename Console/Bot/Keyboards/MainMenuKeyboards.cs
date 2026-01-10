@@ -22,15 +22,11 @@ public static class MainMenuKeyboards
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("🎯 Цели", "menu:goals"),
-                    InlineKeyboardButton.WithCallbackData("🤝 Долги", "menu:debts")
+                    InlineKeyboardButton.WithCallbackData("💸 Долги", "menu:debts")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("📉 Лимиты", "menu:limits"),
-                    InlineKeyboardButton.WithCallbackData("🔄 Платежи", "menu:regular")
-                },
-                new[]
-                {
+                    InlineKeyboardButton.WithCallbackData("🔄 Платежи", "menu:regular"),
                     InlineKeyboardButton.WithCallbackData("ℹ️ Помощь", "menu:help")
                 }
             });

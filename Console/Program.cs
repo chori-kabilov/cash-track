@@ -55,14 +55,14 @@ var balanceCmd = new BalanceCommand(accountService, goalService, debtService, re
 var statsCmd = new StatsCommand(transactionService, limitService, regularService);
 var goalCmd = new GoalCommand(goalService, accountService, transactionService, categoryService);
 var debtCmd = new DebtCommand(debtService, accountService, transactionService, categoryService);
-var regularCmd = new RegularPaymentCommand(regularService);
+var regularCmd = new RegularPaymentCommand(regularService, accountService, transactionService, categoryService);
 var limitCmd = new LimitCommand(limitService, categoryService);
 
 // 5. Обработчики диалогов (модульные)
 var transactionFlowHandler = new TransactionFlowHandler(categoryService, transactionService, accountService, limitService);
 var goalFlowHandler = new GoalFlowHandler(goalService, goalCmd);
 var debtFlowHandler = new DebtFlowHandler(debtService, debtCmd);
-var regularFlowHandler = new RegularFlowHandler(regularService);
+var regularFlowHandler = new RegularFlowHandler(regularService, regularCmd);
 var limitFlowHandler = new LimitFlowHandler(limitService, categoryService);
 
 var flowRouter = new FlowRouter(new IFlowStepHandler[]
@@ -83,7 +83,7 @@ var callbackRouter = new CallbackRouter(new ICallbackHandler[]
     new GoalCallbackHandler(goalCmd, goalService),
     new TransactionCallbackHandler(transactionFlowHandler, transactionService),
     new DebtCallbackHandler(debtCmd, debtService),
-    new RegularCallbackHandler(regularCmd, regularService),
+    new RegularCallbackHandler(regularCmd, regularService, categoryService),
     new LimitCallbackHandler(limitCmd, limitService),
     new GlobalCallbackHandler(transactionFlowHandler, transactionService)
 });
@@ -181,7 +181,7 @@ async Task HandleCommandAsync(ITelegramBotClient botClient, long chatId, long us
             return;
         }
 
-        await regularService.MarkAsPaidAsync(userId, regId, ct);
+        await regularService.MarkAsPaidAsync(userId, regId, null, ct);
         var catId = payment.CategoryId ?? (await categoryService.GetUserCategoriesAsync(userId, ct)).FirstOrDefault(c => c.Type == TransactionType.Expense)?.Id;
         
         if (catId.HasValue)

@@ -52,7 +52,7 @@ public class MenuCallbackHandler(
                 return true;
 
             case "menu:regular":
-                await regularCmd.ShowMenuAsync(bot, chatId, userId, ct, msgId);
+                await regularCmd.ExecuteAsync(bot, chatId, userId, ct, msgId);
                 return true;
 
             case "menu:limits":
