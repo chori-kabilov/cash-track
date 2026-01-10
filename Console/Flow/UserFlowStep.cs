@@ -37,5 +37,7 @@ public enum UserFlowStep
     WaitingRegularEditCat = 31,
     WaitingLimitCategory = 32,
     WaitingLimitAmount = 33,
-    WaitingNewCategory = 34
+    WaitingNewCategory = 34,
+    WaitingHelpBug = 35,
+    WaitingHelpIdea = 36
 }

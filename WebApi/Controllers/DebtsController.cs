@@ -115,8 +115,8 @@ public class DebtsController(IDebtService debtService) : ControllerBase
     public async Task<ActionResult<DebtDto>> MakePayment(long userId, int debtId, [FromQuery] decimal amount)
     {
         if (amount <= 0) return BadRequest(new { Error = "Сумма должна быть > 0" });
-        var d = await debtService.MakePaymentAsync(userId, debtId, amount);
-        return d != null ? Ok(DebtMapper.ToDto(d)) : NotFound();
+        var (debt, _) = await debtService.RecordPaymentAsync(userId, debtId, amount);
+        return debt != null ? Ok(DebtMapper.ToDto(debt)) : NotFound();
     }
 
     [HttpPut("{debtId}/user/{userId}/paid")]

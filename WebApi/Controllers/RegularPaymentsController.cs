@@ -115,8 +115,8 @@ public class RegularPaymentsController(IRegularPaymentService regularPaymentServ
     [SwaggerOperation(Summary = "Оплатить", Description = "Пересчитывает следующую дату")]
     public async Task<ActionResult<RegularPaymentDto>> MarkAsPaid(long userId, int paymentId)
     {
-        var r = await regularPaymentService.MarkAsPaidAsync(userId, paymentId);
-        return r != null ? Ok(RegularPaymentMapper.ToDto(r)) : NotFound();
+        var (payment, _) = await regularPaymentService.MarkAsPaidAsync(userId, paymentId);
+        return payment != null ? Ok(RegularPaymentMapper.ToDto(payment)) : NotFound();
     }
 
     [HttpPut("{paymentId}/user/{userId}/pause")]

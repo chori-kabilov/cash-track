@@ -50,7 +50,7 @@ var limitService = new LimitService(db);
 
 // 4. Команды
 var startCmd = new StartCommand(userService, categoryService);
-var helpCmd = new HelpCommand();
+var helpCmd = new HelpCommand(config.GetValue<long?>("FeedbackChatId"));
 var balanceCmd = new BalanceCommand(accountService, goalService, debtService, regularService, transactionService);
 var statsCmd = new StatsCommand(transactionService, limitService, regularService);
 var goalCmd = new GoalCommand(goalService, accountService, transactionService, categoryService);
@@ -64,6 +64,7 @@ var goalFlowHandler = new GoalFlowHandler(goalService, goalCmd);
 var debtFlowHandler = new DebtFlowHandler(debtService, debtCmd);
 var regularFlowHandler = new RegularFlowHandler(regularService, regularCmd);
 var limitFlowHandler = new LimitFlowHandler(limitService, categoryService);
+var helpFlowHandler = new HelpFlowHandler(helpCmd);
 
 var flowRouter = new FlowRouter(new IFlowStepHandler[]
 {
@@ -71,7 +72,8 @@ var flowRouter = new FlowRouter(new IFlowStepHandler[]
     goalFlowHandler,
     debtFlowHandler,
     regularFlowHandler,
-    limitFlowHandler
+    limitFlowHandler,
+    helpFlowHandler
 });
 
 // 6. Роутер callback-запросов
@@ -85,6 +87,7 @@ var callbackRouter = new CallbackRouter(new ICallbackHandler[]
     new DebtCallbackHandler(debtCmd, debtService),
     new RegularCallbackHandler(regularCmd, regularService, categoryService),
     new LimitCallbackHandler(limitCmd, limitService),
+    new HelpCallbackHandler(helpCmd),
     new GlobalCallbackHandler(transactionFlowHandler, transactionService)
 });
 
@@ -97,6 +100,9 @@ System.Console.WriteLine($"Бот @{me.Username} запущен");
 // 8. Фоновый планировщик (напоминания)
 var scheduler = new Console.Services.SchedulerService(bot, dbOptions);
 scheduler.Start();
+
+// 9. FeedbackChatId для пересылки ответов
+var feedbackChatId = config.GetValue<long?>("FeedbackChatId");
 
 // 9. Запуск polling
 bot.StartReceiving(
@@ -130,6 +136,18 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
         text = text.Trim();
         
         if (string.IsNullOrEmpty(text)) return;
+        
+        // Ответ в группе фидбека — пересылаем пользователю
+        if (feedbackChatId.HasValue && chatId == feedbackChatId.Value && msg.ReplyToMessage?.Text != null)
+        {
+            var targetUserId = HelpCommand.ExtractUserIdFromFeedback(msg.ReplyToMessage.Text);
+            if (targetUserId.HasValue)
+            {
+                await helpCmd.ForwardReplyToUserAsync(botClient, chatId, text, targetUserId.Value, ct);
+                return;
+            }
+        }
+        
         System.Console.WriteLine($"[{userId}] {text}");
 
         // Команды
@@ -142,6 +160,15 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
         // Диалоговый поток
         if (_flow.TryGetValue(userId, out var flow))
         {
+            // Для фидбека передаём данные пользователя
+            if (flow.Step is UserFlowStep.WaitingHelpBug or UserFlowStep.WaitingHelpIdea)
+            {
+                await helpFlowHandler.HandleWithUserAsync(botClient, chatId, userId, 
+                    msg.From.FirstName, msg.From.LastName, msg.From.Username, 
+                    text, flow, _flow, ct);
+                return;
+            }
+            
             await flowRouter.HandleAsync(botClient, chatId, userId, text, flow, _flow, ct);
             return;
         }
