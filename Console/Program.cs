@@ -83,7 +83,7 @@ var callbackRouter = new CallbackRouter(new ICallbackHandler[]
     new BalanceCallbackHandler(balanceCmd, transactionService),
     new StatCallbackHandler(statsCmd, transactionService),
     new GoalCallbackHandler(goalCmd, goalService),
-    new TransactionCallbackHandler(transactionFlowHandler, transactionService),
+    new TransactionCallbackHandler(transactionFlowHandler, transactionService, categoryService, accountService),
     new DebtCallbackHandler(debtCmd, debtService),
     new RegularCallbackHandler(regularCmd, regularService, categoryService),
     new LimitCallbackHandler(limitCmd, limitService),

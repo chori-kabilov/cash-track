@@ -43,7 +43,7 @@ public class BalanceCallbackHandler(
         if (data == "bal:back")
         {
             flowDict.Remove(userId);
-            await bot.EditMessageTextAsync(chatId, msgId, "Выберите действие:", 
+            await bot.EditMessageTextAsync(chatId, msgId, "🏠 *Главное меню*\n\nВыберите действие:", 
                 replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
             return true;
         }

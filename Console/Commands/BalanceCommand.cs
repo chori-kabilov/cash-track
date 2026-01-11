@@ -1,12 +1,15 @@
 using Console.Bot;
 using Console.Flow;
+using Domain.Enums;
 using Infrastructure.Services;
 using Telegram.Bot;
 using Telegram.Bot.Types.Enums;
 
 namespace Console.Commands;
 
-// Панель управления балансом
+/// <summary>
+/// Панель управления балансом — показывает свободные средства и прогноз
+/// </summary>
 public class BalanceCommand(
     IAccountService accountService, 
     IGoalService goalService, 
@@ -14,74 +17,118 @@ public class BalanceCommand(
     IRegularPaymentService regularPaymentService,
     ITransactionService transactionService)
 {
-    // Показать dashboard с расчётом свободных средств
+    private const int ForecastDays = 30;
+    private const string DefaultCurrency = "TJS";
+
+    #region === PUBLIC METHODS ===
+
+    /// <summary>
+    /// Показать дашборд баланса с расчётом свободных средств
+    /// </summary>
     public async Task ExecuteAsync(
-        ITelegramBotClient botClient, 
+        ITelegramBotClient bot, 
         long chatId, 
         long userId, 
         UserFlowState? flowState,
         CancellationToken ct, 
-        int? messageId = null)
+        int? msgId = null)
     {
+        // Загружаем данные
         var account = await accountService.GetUserAccountAsync(userId, ct)
                       ?? await accountService.CreateAccountAsync(userId, ct: ct);
-
         var goals = await goalService.GetUserGoalsAsync(userId, ct);
         var debts = await debtService.GetUnpaidDebtsAsync(userId, ct);
         var payments = await regularPaymentService.GetActiveAsync(userId, ct);
 
         // Расчёт сумм
-        decimal totalBalance = account.Balance;
-        decimal goalsSavings = goals.Sum(g => g.CurrentAmount);
-        decimal paymentsAmount = payments.Sum(p => p.Amount);
-        decimal debtsIOweMoney = debts.Where(d => d.Type == Domain.Enums.DebtType.IOwe).Sum(d => d.RemainingAmount);
-        decimal debtsTheyOweMe = debts.Where(d => d.Type == Domain.Enums.DebtType.TheyOwe).Sum(d => d.RemainingAmount);
-        decimal netDebt = debtsTheyOweMe - debtsIOweMoney;
+        var balanceData = CalculateBalanceData(account.Balance, goals, debts, payments, flowState);
+
+        // Прогноз
+        var avgExpense = await GetAverageDailyExpenseAsync(userId, ct);
+        var daysRemaining = CalculateDaysRemaining(balanceData.FreeAmount, avgExpense);
+
+        // Формируем текст
+        var text = BuildBalanceText(balanceData, daysRemaining, account.Currency ?? DefaultCurrency);
+        var keyboard = BotInlineKeyboards.BalanceDashboard(
+            balanceData.ShowDebts, balanceData.ShowGoals, balanceData.ShowPayments);
+
+        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, text, keyboard, ct);
+    }
+
+    #endregion
+
+    #region === PRIVATE METHODS ===
+
+    private static BalanceData CalculateBalanceData(
+        decimal totalBalance, 
+        IReadOnlyList<Domain.Entities.Goal> goals,
+        IReadOnlyList<Domain.Entities.Debt> debts,
+        IReadOnlyList<Domain.Entities.RegularPayment> payments,
+        UserFlowState? flowState)
+    {
+        var goalsSavings = goals.Sum(g => g.CurrentAmount);
+        var paymentsAmount = payments.Sum(p => p.Amount);
+        var debtsIOwe = debts.Where(d => d.Type == DebtType.IOwe).Sum(d => d.RemainingAmount);
+        var debtsTheyOwe = debts.Where(d => d.Type == DebtType.TheyOwe).Sum(d => d.RemainingAmount);
+        var netDebt = debtsTheyOwe - debtsIOwe;
 
         // Состояния переключателей
-        bool showDebts = flowState?.BalanceShowDebts ?? false;
-        bool showGoals = flowState?.BalanceShowGoals ?? true;
-        bool showPayments = flowState?.BalanceShowPayments ?? true;
+        var showDebts = flowState?.BalanceShowDebts ?? false;
+        var showGoals = flowState?.BalanceShowGoals ?? true;
+        var showPayments = flowState?.BalanceShowPayments ?? true;
 
         // Расчёт свободных средств
-        decimal freeAmount = totalBalance;
+        var freeAmount = totalBalance;
         if (showGoals) freeAmount -= goalsSavings;
         if (showPayments) freeAmount -= paymentsAmount;
         if (showDebts) freeAmount += netDebt;
 
-        // Прогноз на сколько дней хватит
-        var avgExpense = await GetAverageDailyExpenseAsync(userId, ct);
-        var daysRemaining = avgExpense > 0 ? (int)(freeAmount / avgExpense) : 999;
-        var daysText = daysRemaining > 0 ? $"{daysRemaining} дней" : "< 1 дня";
-
-        var freeEmoji = freeAmount < 0 ? "⚠️" : "💸";
-        var freeColor = freeAmount < 0 ? "🔴" : "";
-        
-        var text = $"💰 *Твой Капитал*\n\n" +
-                   $"💵 *В наличии:* ||{totalBalance:F0} {account.Currency}||\n" +
-                   $"{freeEmoji} *Свободно:* {freeColor}*{freeAmount:F0} {account.Currency}*\n\n" +
-                   $"🔻 *Удержано:*\n" +
-                   $"  📅 Регулярные: {(showPayments ? $"-{paymentsAmount:F0}" : "_не учтены_")}\n" +
-                   $"  🎯 Цели: {(showGoals ? $"-{goalsSavings:F0}" : "_не учтены_")}\n" +
-                   $"  📉 Долги: {(showDebts ? $"{netDebt:F0}" : "_не учтены_")}\n\n" +
-                   $"🔄 *Прогноз:* Денег хватит на *{daysText}*.";
-
-        var keyboard = BotInlineKeyboards.BalanceDashboard(showDebts, showGoals, showPayments);
-
-        if (messageId.HasValue)
-            await botClient.EditMessageTextAsync(chatId, messageId.Value, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
-        else
-            await botClient.SendTextMessageAsync(chatId, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+        return new BalanceData(totalBalance, freeAmount, goalsSavings, paymentsAmount, netDebt,
+            showDebts, showGoals, showPayments);
     }
 
-    // Средний расход в день за последние 30 дней
     private async Task<decimal> GetAverageDailyExpenseAsync(long userId, CancellationToken ct)
     {
         var expenses = await transactionService.GetExpensesByPeriodAsync(userId, 
-            DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow, ct);
+            DateTimeOffset.UtcNow.AddDays(-ForecastDays), DateTimeOffset.UtcNow, ct);
         
-        if (!expenses.Any()) return 0;
-        
-        return expenses.Sum(e => e.Amount) / 30;
+        return expenses.Any() ? expenses.Sum(e => e.Amount) / ForecastDays : 0;
     }
+
+    private static int CalculateDaysRemaining(decimal freeAmount, decimal avgExpense)
+    {
+        return avgExpense > 0 ? Math.Max(0, (int)(freeAmount / avgExpense)) : 999;
+    }
+
+    private static string BuildBalanceText(BalanceData data, int daysRemaining, string currency)
+    {
+        var daysText = daysRemaining > 0 ? $"{daysRemaining} дней" : "< 1 дня";
+        var freeEmoji = data.FreeAmount < 0 ? "⚠️" : "💸";
+        var freeColor = data.FreeAmount < 0 ? "🔴" : "";
+
+        return $"💰 *Твой Капитал*\n\n" +
+               $"💵 *В наличии:* ||{data.TotalBalance:F0} {currency}||\n" +
+               $"{freeEmoji} *Свободно:* {freeColor}*{data.FreeAmount:F0} {currency}*\n\n" +
+               $"🔻 *Удержано:*\n" +
+               $"  📅 Регулярные: {(data.ShowPayments ? $"-{data.PaymentsAmount:F0}" : "_не учтены_")}\n" +
+               $"  🎯 Цели: {(data.ShowGoals ? $"-{data.GoalsSavings:F0}" : "_не учтены_")}\n" +
+               $"  📉 Долги: {(data.ShowDebts ? $"{data.NetDebt:F0}" : "_не учтены_")}\n\n" +
+               $"🔄 *Прогноз:* Денег хватит на *{daysText}*.";
+    }
+
+    #endregion
+
+    #region === NESTED TYPES ===
+
+    private sealed record BalanceData(
+        decimal TotalBalance,
+        decimal FreeAmount,
+        decimal GoalsSavings,
+        decimal PaymentsAmount,
+        decimal NetDebt,
+        bool ShowDebts,
+        bool ShowGoals,
+        bool ShowPayments);
+
+    #endregion
 }

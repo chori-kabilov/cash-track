@@ -1,4 +1,5 @@
 using Console.Bot;
+using Console.Bot.Keyboards;
 using Console.Commands;
 using Console.Flow;
 using Domain.Enums;
@@ -60,22 +61,34 @@ public class MenuCallbackHandler(
                 return true;
 
             case "menu:income":
-                flowDict[userId] = new UserFlowState { Step = UserFlowStep.WaitingAmount, PendingType = TransactionType.Income, PendingMessageId = msgId };
+                flowDict[userId] = new UserFlowState 
+                { 
+                    Step = UserFlowStep.WaitingAmount, 
+                    PendingType = TransactionType.Income, 
+                    PendingMessageId = msgId 
+                };
                 await bot.EditMessageTextAsync(chatId, msgId, 
-                    "💵 *Доход*\n\nВведите сумму и описание через пробел:\n_Пример: 5000 премия_", 
-                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.Cancel(), cancellationToken: ct);
+                    "💰 *Доход*\n\nВведите сумму:\n_Можно добавить описание через пробел_", 
+                    ParseMode.Markdown, replyMarkup: TransactionKeyboards.IncomeStart(), cancellationToken: ct);
                 return true;
 
             case "menu:expense":
-                flowDict[userId] = new UserFlowState { Step = UserFlowStep.WaitingAmount, PendingType = TransactionType.Expense, PendingMessageId = msgId, PendingIsImpulsive = false };
+                flowDict[userId] = new UserFlowState 
+                { 
+                    Step = UserFlowStep.WaitingAmount, 
+                    PendingType = TransactionType.Expense, 
+                    PendingMessageId = msgId, 
+                    PendingIsImpulsive = false 
+                };
                 await bot.EditMessageTextAsync(chatId, msgId, 
-                    "💸 *Расход*\n\nВведите сумму и описание через пробел:\n_Пример: 150 такси_", 
-                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.ExpenseStart(false), cancellationToken: ct);
+                    "💸 *Расход*\n\nВведите сумму:\n_Можно добавить описание через пробел_", 
+                    ParseMode.Markdown, replyMarkup: TransactionKeyboards.ExpenseStart(false), cancellationToken: ct);
                 return true;
 
             case "menu:main":
-                await bot.EditMessageTextAsync(chatId, msgId, "Выберите действие:", 
-                    replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                await bot.EditMessageTextAsync(chatId, msgId, 
+                    "🏠 *Главное меню*\n\nВыберите действие:", 
+                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
                 return true;
         }
 
