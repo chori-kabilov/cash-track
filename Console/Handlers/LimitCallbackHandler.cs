@@ -36,7 +36,7 @@ public class LimitCallbackHandler(
         if (data.StartsWith("limit:delete:") && int.TryParse(data.Split(':')[2], out var delLimitId))
         {
             await limitService.DeleteAsync(userId, delLimitId, ct);
-            await limitCmd.ShowMenuAsync(bot, chatId, userId, ct);
+            await limitCmd.ShowMenuAsync(bot, chatId, userId, ct, msgId: null, callbackQueryId: cb.Id);
             return true;
         }
 

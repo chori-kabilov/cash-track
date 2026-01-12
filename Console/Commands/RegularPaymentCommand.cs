@@ -18,30 +18,30 @@ public class RegularPaymentCommand(
     private const string ExpenseCategoryName = "→ Регулярный платёж";
 
     // Точка входа
-    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, long userId, CancellationToken ct, int? messageId = null)
+    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, long userId, CancellationToken ct, int? messageId = null, string? callbackQueryId = null)
     {
         if (messageId.HasValue)
-            await ShowDashboardAsync(bot, chatId, userId, messageId.Value, ct);
+            await ShowDashboardAsync(bot, chatId, userId, messageId.Value, ct, callbackQueryId);
         else
         {
             var msg = await bot.SendTextMessageAsync(chatId, "🔄 Загрузка...", cancellationToken: ct);
-            await ShowDashboardAsync(bot, chatId, userId, msg.MessageId, ct);
+            await ShowDashboardAsync(bot, chatId, userId, msg.MessageId, ct, callbackQueryId);
         }
     }
 
     // === ЭКРАНЫ ===
 
     // Дашборд
-    public async Task ShowDashboardAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct)
+    public async Task ShowDashboardAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var payments = await regularService.GetUserPaymentsAsync(userId, ct);
         var activePayments = payments.Where(p => !p.IsPaused).ToList();
 
         if (!payments.Any())
         {
-            await bot.EditMessageTextAsync(chatId, msgId,
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                 "🔄 *Регулярные платежи*\n\nУ вас нет регулярных платежей.\nДобавьте первый!",
-                ParseMode.Markdown, replyMarkup: RegularKeyboards.Empty(), cancellationToken: ct);
+                RegularKeyboards.Empty(), ct, callbackQueryId);
             return;
         }
 
@@ -66,18 +66,18 @@ public class RegularPaymentCommand(
                 sb.AppendLine($"🟡 {p.Name} — {p.Amount:N0} TJS ({p.NextDueDate:dd.MM})");
         }
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: RegularKeyboards.Dashboard(), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            RegularKeyboards.Dashboard(), ct, callbackQueryId);
     }
 
     // Список платежей
-    public async Task ShowListAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, int page, CancellationToken ct)
+    public async Task ShowListAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, int page, CancellationToken ct, string? callbackQueryId = null)
     {
         var payments = await regularService.GetUserPaymentsAsync(userId, ct);
 
         if (!payments.Any())
         {
-            await ShowDashboardAsync(bot, chatId, userId, msgId, ct);
+            await ShowDashboardAsync(bot, chatId, userId, msgId, ct, callbackQueryId);
             return;
         }
 
@@ -104,15 +104,15 @@ public class RegularPaymentCommand(
 
         sb.AppendLine("\n👇 *Введите номер для деталей:*");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: RegularKeyboards.List(page, totalPages), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            RegularKeyboards.List(page, totalPages), ct, callbackQueryId);
     }
 
     // Детали платежа
-    public async Task ShowDetailAsync(ITelegramBotClient bot, long chatId, long userId, int paymentId, int msgId, CancellationToken ct)
+    public async Task ShowDetailAsync(ITelegramBotClient bot, long chatId, long userId, int paymentId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
-        if (payment == null) { await ShowDashboardAsync(bot, chatId, userId, msgId, ct); return; }
+        if (payment == null) { await ShowDashboardAsync(bot, chatId, userId, msgId, ct, callbackQueryId); return; }
 
         var account = await accountService.GetUserAccountAsync(userId, ct);
         var hasEnough = account != null && account.Balance >= payment.Amount;
@@ -150,12 +150,12 @@ public class RegularPaymentCommand(
             sb.AppendLine($"\n💳 Баланс: {account?.Balance ?? 0:N0} TJS ✅");
         }
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: RegularKeyboards.Detail(paymentId, payment.IsPaused, hasEnough), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            RegularKeyboards.Detail(paymentId, payment.IsPaused, hasEnough), ct, callbackQueryId);
     }
 
     // История
-    public async Task ShowHistoryAsync(ITelegramBotClient bot, long chatId, long userId, int paymentId, int msgId, CancellationToken ct)
+    public async Task ShowHistoryAsync(ITelegramBotClient bot, long chatId, long userId, int paymentId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
         if (payment == null) return;
@@ -181,8 +181,8 @@ public class RegularPaymentCommand(
             sb.AppendLine($"💰 Всего: {history.Sum(h => h.Amount):N0} TJS");
         }
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: RegularKeyboards.History(paymentId), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            RegularKeyboards.History(paymentId), ct, callbackQueryId);
     }
 
     // После создания
@@ -249,15 +249,15 @@ public class RegularPaymentCommand(
     }
 
     // Удалить
-    public async Task DeleteAsync(ITelegramBotClient bot, long chatId, long userId, int paymentId, int msgId, CancellationToken ct)
+    public async Task DeleteAsync(ITelegramBotClient bot, long chatId, long userId, int paymentId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
         if (payment == null) return;
 
         await regularService.DeleteAsync(userId, paymentId, ct);
-        await bot.EditMessageTextAsync(chatId, msgId,
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
             $"✅ Удалено.\n\n📋 {payment.Name} — удалён",
-            ParseMode.Markdown, replyMarkup: RegularKeyboards.AfterCreate(), cancellationToken: ct);
+            RegularKeyboards.AfterCreate(), ct, callbackQueryId);
     }
 
     // === ХЕЛПЕРЫ ===

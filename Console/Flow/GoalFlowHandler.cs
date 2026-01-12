@@ -156,9 +156,7 @@ public class GoalFlowHandler(
         await goalService.SetActiveAsync(userId, goal.Id, ct);
         flowDict.Remove(userId);
         
-        await bot.SendTextMessageAsync(chatId, 
-            $"✅ *{goal.Name}* — теперь главная цель!", 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+        await goalCmd.ShowMainAsync(bot, chatId, userId, null, ct, null, $"✅ *{goal.Name}* — теперь главная цель!");
         return true;
     }
 
@@ -170,9 +168,7 @@ public class GoalFlowHandler(
         await goalService.UpdateNameAsync(userId, flow.PendingGoalId.Value, text.Trim(), ct);
         flowDict.Remove(userId);
         
-        await bot.SendTextMessageAsync(chatId, 
-            $"✅ Название изменено на *{text.Trim()}*", 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+        await goalCmd.ShowMainAsync(bot, chatId, userId, null, ct, null, $"✅ Название изменено на *{text.Trim()}*");
         return true;
     }
 
@@ -191,9 +187,7 @@ public class GoalFlowHandler(
         await goalService.UpdateTargetAsync(userId, flow.PendingGoalId.Value, amount, ct);
         flowDict.Remove(userId);
         
-        await bot.SendTextMessageAsync(chatId, 
-            $"✅ Сумма изменена на *{amount:N0}* TJS", 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+        await goalCmd.ShowMainAsync(bot, chatId, userId, null, ct, null, $"✅ Сумма изменена на *{amount:N0}* TJS");
         return true;
     }
 
@@ -219,8 +213,7 @@ public class GoalFlowHandler(
         flowDict.Remove(userId);
         
         var msg = deadline.HasValue ? $"✅ Дедлайн: *{deadline:dd.MM.yyyy}*" : "✅ Дедлайн убран";
-        await bot.SendTextMessageAsync(chatId, msg, ParseMode.Markdown, 
-            replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+        await goalCmd.ShowMainAsync(bot, chatId, userId, null, ct, null, msg);
         return true;
     }
 }

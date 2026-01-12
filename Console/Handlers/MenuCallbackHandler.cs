@@ -31,33 +31,33 @@ public class MenuCallbackHandler(
         {
             case "menu:balance":
                 if (flow == null) { flow = new UserFlowState(); flowDict[userId] = flow; }
-                await balanceCmd.ExecuteAsync(bot, chatId, userId, flow, ct, msgId);
+                await balanceCmd.ExecuteAsync(bot, chatId, userId, flow, ct, msgId, cb.Id);
                 return true;
 
             case "menu:stats":
                 if (flow == null) { flow = new UserFlowState(); flowDict[userId] = flow; }
-                await statsCmd.ExecuteAsync(bot, chatId, userId, flow, ct, msgId);
+                await statsCmd.ExecuteAsync(bot, chatId, userId, flow, ct, msgId, cb.Id);
                 return true;
 
             case "menu:help":
-                await helpCmd.ExecuteAsync(bot, chatId, ct, msgId);
+                await helpCmd.ExecuteAsync(bot, chatId, ct, msgId, cb.Id);
                 return true;
 
             case "menu:goals":
                 if (flow == null) { flow = new UserFlowState(); flowDict[userId] = flow; }
-                await goalCmd.ExecuteAsync(bot, chatId, userId, flow, ct, msgId);
+                await goalCmd.ExecuteAsync(bot, chatId, userId, flow, ct, msgId, cb.Id);
                 return true;
 
             case "menu:debts":
-                await debtCmd.ExecuteAsync(bot, chatId, userId, ct, msgId);
+                await debtCmd.ExecuteAsync(bot, chatId, userId, ct, msgId, cb.Id);
                 return true;
 
             case "menu:regular":
-                await regularCmd.ExecuteAsync(bot, chatId, userId, ct, msgId);
+                await regularCmd.ExecuteAsync(bot, chatId, userId, ct, msgId, cb.Id);
                 return true;
 
             case "menu:limits":
-                await limitCmd.ShowMenuAsync(bot, chatId, userId, ct, msgId);
+                await limitCmd.ShowMenuAsync(bot, chatId, userId, ct, msgId, cb.Id);
                 return true;
 
             case "menu:income":
@@ -67,9 +67,9 @@ public class MenuCallbackHandler(
                     PendingType = TransactionType.Income, 
                     PendingMessageId = msgId 
                 };
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     "💰 *Доход*\n\nВведите сумму:\n_Можно добавить описание через пробел_", 
-                    ParseMode.Markdown, replyMarkup: TransactionKeyboards.IncomeStart(), cancellationToken: ct);
+                    TransactionKeyboards.IncomeStart(), ct, cb.Id);
                 return true;
 
             case "menu:expense":
@@ -80,15 +80,15 @@ public class MenuCallbackHandler(
                     PendingMessageId = msgId, 
                     PendingIsImpulsive = false 
                 };
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     "💸 *Расход*\n\nВведите сумму:\n_Можно добавить описание через пробел_", 
-                    ParseMode.Markdown, replyMarkup: TransactionKeyboards.ExpenseStart(false), cancellationToken: ct);
+                    TransactionKeyboards.ExpenseStart(false), ct, cb.Id);
                 return true;
 
             case "menu:main":
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     "🏠 *Главное меню*\n\nВыберите действие:", 
-                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                    BotInlineKeyboards.MainMenu(), ct, cb.Id);
                 return true;
         }
 

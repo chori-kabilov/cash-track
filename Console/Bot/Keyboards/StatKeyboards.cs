@@ -55,15 +55,15 @@ public static class StatKeyboards
     // История (с пагинацией)
     public static InlineKeyboardMarkup StatsHistory(int page, int totalPages)
     {
+        var navButtons = new List<InlineKeyboardButton>();
+        if (page > 1) navButtons.Add(InlineKeyboardButton.WithCallbackData("<", "stat:page:prev"));
+        navButtons.Add(InlineKeyboardButton.WithCallbackData($"{page}/{totalPages}", "stat:noop"));
+        if (page < totalPages) navButtons.Add(InlineKeyboardButton.WithCallbackData(">", "stat:page:next"));
+
         return new InlineKeyboardMarkup(
             new[]
             {
-                new[]
-                { 
-                    InlineKeyboardButton.WithCallbackData("<", "stat:page:prev"),
-                    InlineKeyboardButton.WithCallbackData($"{page}/{totalPages}", "stat:noop"),
-                    InlineKeyboardButton.WithCallbackData(">", "stat:page:next")
-                },
+                navButtons.ToArray(),
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "stat:summary") }
             });
     }

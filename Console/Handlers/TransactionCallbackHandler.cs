@@ -1,5 +1,6 @@
 using Console.Bot;
 using Console.Bot.Keyboards;
+using Console.Commands;
 using Console.Flow;
 using Domain.Enums;
 using Infrastructure.Services;
@@ -50,7 +51,7 @@ public class TransactionCallbackHandler(
                              $"Выберите категорию или создайте новую:";
                 
                 var keyboard = TransactionKeyboards.SmartCategories(top2, others, pageFlow.PendingType, page);
-                await bot.EditMessageTextAsync(chatId, msgId, prompt, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, prompt, keyboard, ct, cb.Id);
                 return true;
             }
         }
@@ -93,9 +94,9 @@ public class TransactionCallbackHandler(
                 ? TransactionKeyboards.ExpenseStart(backAmountFlow.PendingIsImpulsive) 
                 : TransactionKeyboards.IncomeStart();
             
-            await bot.EditMessageTextAsync(chatId, msgId,
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                 $"{emoji} *{typeLabel}*\n\nВведите сумму:\n_Можно добавить описание через пробел_",
-                ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+                keyboard, ct, cb.Id);
             return true;
         }
         
@@ -111,8 +112,8 @@ public class TransactionCallbackHandler(
                          $"💵 Сумма: *{backCatFlow.PendingAmount:N0} TJS*\n\n" +
                          $"Выберите категорию или создайте новую:";
             
-            await bot.EditMessageTextAsync(chatId, msgId, prompt, ParseMode.Markdown,
-                replyMarkup: TransactionKeyboards.SmartCategories(top2, others, backCatFlow.PendingType), cancellationToken: ct);
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, prompt,
+                TransactionKeyboards.SmartCategories(top2, others, backCatFlow.PendingType), ct, cb.Id);
             return true;
         }
         
@@ -143,8 +144,8 @@ public class TransactionCallbackHandler(
             }
             else
             {
-                await bot.EditMessageTextAsync(chatId, msgId, "✅ *Готово!*\n\nЧто дальше?", ParseMode.Markdown, 
-                    replyMarkup: TransactionKeyboards.AfterTransaction(), cancellationToken: ct);
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, "✅ *Готово!*\n\nЧто дальше?", 
+                    TransactionKeyboards.AfterTransaction(), ct, cb.Id);
             }
             return true;
         }

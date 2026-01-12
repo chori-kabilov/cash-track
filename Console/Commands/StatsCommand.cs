@@ -16,15 +16,15 @@ public class StatsCommand(
 {
     // Главная точка входа
     public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, long userId, 
-        UserFlowState flow, CancellationToken ct, int? messageId = null)
+        UserFlowState flow, CancellationToken ct, int? messageId = null, string? callbackQueryId = null)
     {
         flow.CurrentStatsScreen = StatsScreen.Summary;
-        await RenderCurrentScreenAsync(bot, chatId, userId, flow, ct, messageId);
+        await RenderCurrentScreenAsync(bot, chatId, userId, flow, ct, messageId, callbackQueryId);
     }
 
     // Рендер текущего экрана на основе flow.CurrentStatsScreen
     public async Task RenderCurrentScreenAsync(ITelegramBotClient bot, long chatId, long userId,
-        UserFlowState flow, CancellationToken ct, int? messageId = null)
+        UserFlowState flow, CancellationToken ct, int? messageId = null, string? callbackQueryId = null)
     {
         System.Console.WriteLine($"[StatsCommand] Rendering screen: {flow.CurrentStatsScreen}");
         try 
@@ -57,6 +57,40 @@ public class StatsCommand(
         }
         catch (Exception ex)
         {
+            if (ex.Message.Contains("message is not modified"))
+            {
+                System.Console.WriteLine("[StatsCommand] Msg not modified. Handling with toast.");
+                
+                // 1. Сначала отвечаем на коллбэк (пустым), чтобы остановить спиннер
+                if (callbackQueryId != null)
+                {
+                    try { await bot.AnswerCallbackQueryAsync(callbackQueryId, cancellationToken: ct); } catch { }
+                }
+
+                // 2. Отправляем временное сообщение в чат (так как нативный тост может быть не виден)
+                try 
+                {
+                    var msg = await bot.SendTextMessageAsync(chatId, 
+                        "⏳ Данные уже актуальны. Не нажимайте часто!", 
+                        cancellationToken: ct);
+                    
+                    // Ждем 2 секунды и удаляем
+                    // Запускаем в отдельной задаче, чтобы не блокировать возврат управления (Fire-and-forget но с await внутри Task.Run)
+                    _ = Task.Run(async () => 
+                    {
+                        try 
+                        {
+                            await Task.Delay(2000, CancellationToken.None);
+                            await bot.DeleteMessageAsync(chatId, msg.MessageId, CancellationToken.None);
+                        }
+                        catch { /* ignore cleanup errors */ }
+                    }, ct);
+                }
+                catch { /* ignore messaging errors */ }
+
+                return;
+            }
+
             System.Console.WriteLine($"[StatsCommand] ERROR: {ex.Message}");
             System.Console.WriteLine(ex.StackTrace);
             await bot.SendTextMessageAsync(chatId, $"Ошибка отображения: {ex.Message}", cancellationToken: ct);
@@ -260,8 +294,13 @@ public class StatsCommand(
 
         var grouped = transactions
             .Where(t => t.Category != null)
-            .GroupBy(t => t.Category!)
-            .Select(g => new { Category = g.Key, Total = g.Sum(t => t.Amount), Count = g.Count() })
+            .GroupBy(t => t.Category!.Name) // Группируем по имени, так как объекты могут быть разными инстансами
+            .Select(g => new 
+            { 
+                Category = g.First().Category!, // Берем данные категории из первого элемента
+                Total = g.Sum(t => t.Amount), 
+                Count = g.Count() 
+            })
             .OrderByDescending(x => x.Total)
             .Take(10)
             .ToList();
@@ -341,7 +380,7 @@ public class StatsCommand(
         {
             if (item.DateStr != lastDate)
             {
-                sb.AppendLine($"*{item.DateStr}*");
+                sb.AppendLine($"📅 *{item.DateStr}*");
                 lastDate = item.DateStr;
             }
             
@@ -387,7 +426,11 @@ public class StatsCommand(
         foreach (var txn in emotional)
         {
             var desc = txn.Description ?? txn.Category?.Name ?? "Покупка";
-            sb.AppendLine($"{i}. {txn.Category?.Icon ?? "🛒"} {desc}: *{txn.Amount:N0}* ({txn.Date:dd.MM})");
+            // Формат:
+            // 1. *500* - 12.01
+            //    🛒 Бургер
+            sb.AppendLine($"{i}. *{txn.Amount:N0}* — {txn.Date:dd.MM}");
+            sb.AppendLine($"   {txn.Category?.Icon ?? "🛒"} {desc}");
             i++;
         }
 

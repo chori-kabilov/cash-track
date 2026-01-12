@@ -28,46 +28,46 @@ public class HelpCallbackHandler(HelpCommand helpCmd) : ICallbackHandler
         {
             case "help:main":
                 hFlow.Step = UserFlowStep.None;
-                await helpCmd.ShowMainAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowMainAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:guide":
                 hFlow.Step = UserFlowStep.None;
-                await helpCmd.ShowGuideAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowGuideAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:guide:balance":
-                await helpCmd.ShowGuideBalanceAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowGuideBalanceAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:guide:stats":
-                await helpCmd.ShowGuideStatsAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowGuideStatsAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:guide:goals":
-                await helpCmd.ShowGuideGoalsAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowGuideGoalsAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:guide:debts":
-                await helpCmd.ShowGuideDebtsAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowGuideDebtsAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:guide:regular":
-                await helpCmd.ShowGuideRegularAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowGuideRegularAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:contact":
-                await helpCmd.ShowContactAsync(bot, chatId, msgId, ct);
+                await helpCmd.ShowContactAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:bug":
                 hFlow.Step = UserFlowStep.WaitingHelpBug;
-                await helpCmd.PromptBugReportAsync(bot, chatId, msgId, ct);
+                await helpCmd.PromptBugReportAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
 
             case "help:idea":
                 hFlow.Step = UserFlowStep.WaitingHelpIdea;
-                await helpCmd.PromptIdeaAsync(bot, chatId, msgId, ct);
+                await helpCmd.PromptIdeaAsync(bot, chatId, msgId, ct, cb.Id);
                 return true;
         }
 

@@ -19,30 +19,30 @@ public class DebtCommand(
     private const string ExpenseCategoryName = "→ Выплата долга";
 
     // Точка входа
-    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, long userId, CancellationToken ct, int? messageId = null)
+    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, long userId, CancellationToken ct, int? messageId = null, string? callbackQueryId = null)
     {
         if (messageId.HasValue)
-            await ShowDashboardAsync(bot, chatId, userId, messageId.Value, ct);
+            await ShowDashboardAsync(bot, chatId, userId, messageId.Value, ct, callbackQueryId);
         else
         {
             var msg = await bot.SendTextMessageAsync(chatId, "💸 Загрузка...", cancellationToken: ct);
-            await ShowDashboardAsync(bot, chatId, userId, msg.MessageId, ct);
+            await ShowDashboardAsync(bot, chatId, userId, msg.MessageId, ct, callbackQueryId);
         }
     }
 
     // === ЭКРАНЫ ===
 
     // Дашборд
-    public async Task ShowDashboardAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct)
+    public async Task ShowDashboardAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var (theyOwe, theyOweCount, iOwe, iOweCount) = await debtService.GetSummaryAsync(userId, ct);
         var overdue = await debtService.GetOverdueDebtsAsync(userId, ct);
 
         if (theyOweCount == 0 && iOweCount == 0)
         {
-            await bot.EditMessageTextAsync(chatId, msgId,
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                 "💸 *Долги*\n\nУ вас пока нет активных долгов.\nЕсли есть добавьте!",
-                ParseMode.Markdown, replyMarkup: DebtKeyboards.Empty(), cancellationToken: ct);
+                DebtKeyboards.Empty(), ct, callbackQueryId);
             return;
         }
 
@@ -66,12 +66,12 @@ public class DebtCommand(
             }
         }
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: DebtKeyboards.Dashboard(), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            DebtKeyboards.Dashboard(), ct, callbackQueryId);
     }
 
     // Список долгов по типу
-    public async Task ShowListAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, DebtType type, int page, CancellationToken ct)
+    public async Task ShowListAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, DebtType type, int page, CancellationToken ct, string? callbackQueryId = null)
     {
         var debts = await debtService.GetByTypeAsync(userId, type, ct);
         var typeLabel = type == DebtType.TheyOwe ? "📥 *Мне должны*" : "📤 *Я должен*";
@@ -79,9 +79,9 @@ public class DebtCommand(
 
         if (!debts.Any())
         {
-            await bot.EditMessageTextAsync(chatId, msgId,
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                 $"{typeLabel}\n\n_Пусто._",
-                ParseMode.Markdown, replyMarkup: DebtKeyboards.List(0, 1, typeCode), cancellationToken: ct);
+                DebtKeyboards.List(0, 1, typeCode), ct, callbackQueryId);
             return;
         }
 
@@ -109,15 +109,15 @@ public class DebtCommand(
 
         sb.AppendLine("\n👇 *Введите номер для деталей:*");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: DebtKeyboards.List(page, totalPages, typeCode), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            DebtKeyboards.List(page, totalPages, typeCode), ct, callbackQueryId);
     }
 
     // Детали долга
-    public async Task ShowDetailAsync(ITelegramBotClient bot, long chatId, long userId, int debtId, int msgId, CancellationToken ct)
+    public async Task ShowDetailAsync(ITelegramBotClient bot, long chatId, long userId, int debtId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var debt = await debtService.GetByIdAsync(userId, debtId, ct);
-        if (debt == null) { await ShowDashboardAsync(bot, chatId, userId, msgId, ct); return; }
+        if (debt == null) { await ShowDashboardAsync(bot, chatId, userId, msgId, ct, callbackQueryId); return; }
 
         var isTheyOwe = debt.Type == DebtType.TheyOwe;
         var typeIcon = isTheyOwe ? "📥" : "📤";
@@ -142,12 +142,12 @@ public class DebtCommand(
 
         sb.AppendLine($"\n🗓 Создан: {debt.CreatedAt:dd.MM.yyyy}");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: DebtKeyboards.Detail(debtId, isTheyOwe), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            DebtKeyboards.Detail(debtId, isTheyOwe), ct, callbackQueryId);
     }
 
     // История платежей
-    public async Task ShowHistoryAsync(ITelegramBotClient bot, long chatId, long userId, int debtId, int msgId, CancellationToken ct)
+    public async Task ShowHistoryAsync(ITelegramBotClient bot, long chatId, long userId, int debtId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var debt = await debtService.GetByIdAsync(userId, debtId, ct);
         if (debt == null) return;
@@ -180,8 +180,8 @@ public class DebtCommand(
 
         sb.AppendLine($"\n💰 Осталось: *{debt.RemainingAmount:N0}* TJS");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: DebtKeyboards.History(debtId, isTheyOwe), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            DebtKeyboards.History(debtId, isTheyOwe), ct, callbackQueryId);
     }
 
     // После создания
@@ -289,15 +289,15 @@ public class DebtCommand(
     }
 
     // Удалить
-    public async Task DeleteAsync(ITelegramBotClient bot, long chatId, long userId, int debtId, int msgId, CancellationToken ct)
+    public async Task DeleteAsync(ITelegramBotClient bot, long chatId, long userId, int debtId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var debt = await debtService.GetByIdAsync(userId, debtId, ct);
         if (debt == null) return;
 
         await debtService.DeleteAsync(userId, debtId, ct);
-        await bot.EditMessageTextAsync(chatId, msgId,
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
             $"✅ Долг «{debt.PersonName}» удалён.",
-            ParseMode.Markdown, replyMarkup: DebtKeyboards.AfterCreate(), cancellationToken: ct);
+            DebtKeyboards.AfterCreate(), ct, callbackQueryId);
     }
 
     // === ХЕЛПЕРЫ ===

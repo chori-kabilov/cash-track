@@ -17,21 +17,21 @@ public class HelpCommand
     }
 
     // Точка входа
-    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, CancellationToken ct, int? msgId = null)
+    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, CancellationToken ct, int? msgId = null, string? callbackQueryId = null)
     {
         if (msgId.HasValue)
-            await ShowMainAsync(bot, chatId, msgId.Value, ct);
+            await ShowMainAsync(bot, chatId, msgId.Value, ct, callbackQueryId);
         else
         {
             var msg = await bot.SendTextMessageAsync(chatId, "ℹ️ Загрузка...", cancellationToken: ct);
-            await ShowMainAsync(bot, chatId, msg.MessageId, ct);
+            await ShowMainAsync(bot, chatId, msg.MessageId, ct, callbackQueryId);
         }
     }
 
     // === ЭКРАНЫ ===
 
     // Главное меню помощи
-    public async Task ShowMainAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowMainAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("ℹ️ *CashTrack — Помощь*\n");
@@ -44,23 +44,23 @@ public class HelpCommand
         sb.AppendLine("• 🔄 Напоминать о платежах");
         sb.AppendLine("\nДля деталей выберите раздел ⬇️");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.Main(), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.Main(), ct, callbackQueryId);
     }
 
     // Справочник
-    public async Task ShowGuideAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowGuideAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("📖 *Справочник*\n");
         sb.AppendLine("Выберите функцию для подробностей:");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.Guide(), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.Guide(), ct, callbackQueryId);
     }
 
     // Справка: Баланс
-    public async Task ShowGuideBalanceAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowGuideBalanceAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("💰 *Баланс*\n");
@@ -74,12 +74,12 @@ public class HelpCommand
         sb.AppendLine("Баланс = Доходы − Расходы\n");
         sb.AppendLine("💡 _Старайтесь не уходить в минус!_");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.GuideWithAction("💰 К Балансу", "menu:balance"), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.GuideWithAction("💰 К Балансу", "menu:balance"), ct, callbackQueryId);
     }
 
     // Справка: Статистика
-    public async Task ShowGuideStatsAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowGuideStatsAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("📊 *Статистика*\n");
@@ -92,12 +92,12 @@ public class HelpCommand
         sb.AppendLine("Неделя | Месяц | Год\n");
         sb.AppendLine("💡 _Следите за топ-3 категориями!_");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.GuideWithAction("📊 К Статистике", "menu:stats"), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.GuideWithAction("📊 К Статистике", "menu:stats"), ct, callbackQueryId);
     }
 
     // Справка: Цели
-    public async Task ShowGuideGoalsAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowGuideGoalsAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("🎯 *Цели накопления*\n");
@@ -111,12 +111,12 @@ public class HelpCommand
         sb.AppendLine("• Остальные в очереди");
         sb.AppendLine("• Прогресс-бар и %");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.GuideWithAction("🎯 К Целям", "menu:goals"), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.GuideWithAction("🎯 К Целям", "menu:goals"), ct, callbackQueryId);
     }
 
     // Справка: Долги
-    public async Task ShowGuideDebtsAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowGuideDebtsAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("💸 *Долги*\n");
@@ -129,12 +129,12 @@ public class HelpCommand
         sb.AppendLine("• История погашения");
         sb.AppendLine("• Связь с балансом");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.GuideWithAction("💸 К Долгам", "menu:debts"), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.GuideWithAction("💸 К Долгам", "menu:debts"), ct, callbackQueryId);
     }
 
     // Справка: Платежи
-    public async Task ShowGuideRegularAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowGuideRegularAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("🔄 *Регулярные платежи*\n");
@@ -147,12 +147,12 @@ public class HelpCommand
         sb.AppendLine("3. Отмечайте «Оплачено»\n");
         sb.AppendLine("💡 _При оплате — автосписание с баланса_");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.GuideWithAction("🔄 К Платежам", "menu:regular"), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.GuideWithAction("🔄 К Платежам", "menu:regular"), ct, callbackQueryId);
     }
 
     // Контакт разработчика
-    public async Task ShowContactAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task ShowContactAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("📱 *Связь с разработчиком*\n");
@@ -162,12 +162,12 @@ public class HelpCommand
         sb.AppendLine($"👤 Telegram: `{DeveloperUsername}`\n");
         sb.AppendLine("💬 Напишите — отвечу!");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.BackToHelp(), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.BackToHelp(), ct, callbackQueryId);
     }
 
     // Промпт для бага
-    public async Task PromptBugReportAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task PromptBugReportAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("🐛 *Сообщить об ошибке*\n");
@@ -175,12 +175,12 @@ public class HelpCommand
         sb.AppendLine("Опишите проблему:\n");
         sb.AppendLine("_Пример: «При нажатии X ничего не происходит»_");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.Cancel(), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.Cancel(), ct, callbackQueryId);
     }
 
     // Промпт для идеи
-    public async Task PromptIdeaAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct)
+    public async Task PromptIdeaAsync(ITelegramBotClient bot, long chatId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("💡 *Предложить идею*\n");
@@ -188,8 +188,8 @@ public class HelpCommand
         sb.AppendLine("Напишите вашу идею:\n");
         sb.AppendLine("_Пример: «Хочу видеть графики расходов»_");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(),
-            ParseMode.Markdown, replyMarkup: HelpKeyboards.Cancel(), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
+            HelpKeyboards.Cancel(), ct, callbackQueryId);
     }
 
     // Отправить фидбек в канал/группу с возможностью ответа

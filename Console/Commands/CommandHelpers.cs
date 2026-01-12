@@ -49,14 +49,75 @@ public static class CommandHelpers
         };
     }
 
-    // Отправить или отредактировать сообщение
+    // Отправить или отредактировать сообщение (с обработкой "не изменено")
     public static async Task SendOrEditAsync(ITelegramBotClient bot, long chatId, int? msgId, 
-        string text, InlineKeyboardMarkup? keyboard, CancellationToken ct)
+        string text, InlineKeyboardMarkup? keyboard, CancellationToken ct, string? callbackQueryId = null)
     {
         if (msgId.HasValue)
-            await bot.EditMessageTextAsync(chatId, msgId.Value, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+        {
+            try
+            {
+                await bot.EditMessageTextAsync(chatId, msgId.Value, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("message is not modified"))
+                {
+                    await HandleMessageNotModifiedAsync(bot, chatId, callbackQueryId, ct);
+                    return;
+                }
+                throw;
+            }
+        }
         else
+        {
             await bot.SendTextMessageAsync(chatId, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+        }
+    }
+
+    // Безопасное редактирование сообщения (для вызова напрямую)
+    public static async Task SafeEditMessageAsync(ITelegramBotClient bot, long chatId, int msgId, 
+        string text, InlineKeyboardMarkup? keyboard, CancellationToken ct, string? callbackQueryId = null)
+    {
+        try
+        {
+            await bot.EditMessageTextAsync(chatId, msgId, text, ParseMode.Markdown, replyMarkup: keyboard, cancellationToken: ct);
+        }
+        catch (Exception ex)
+        {
+             if (ex.Message.Contains("message is not modified"))
+             {
+                 await HandleMessageNotModifiedAsync(bot, chatId, callbackQueryId, ct);
+                 return;
+             }
+             throw;
+        }
+    }
+
+    // Логика "умного уведомления"
+    private static async Task HandleMessageNotModifiedAsync(ITelegramBotClient bot, long chatId, string? callbackQueryId, CancellationToken ct)
+    {
+        // 1. Остановить спиннер
+        if (callbackQueryId != null)
+        {
+            try { await bot.AnswerCallbackQueryAsync(callbackQueryId, cancellationToken: ct); } catch { }
+        }
+
+        // 2. Отправить самоликвидирующееся сообщение
+        try 
+        {
+             var msg = await bot.SendTextMessageAsync(chatId, "⏳ Данные уже актуальны. Не нажимайте часто!", cancellationToken: ct);
+             _ = Task.Run(async () => 
+             {
+                 try 
+                 {
+                     await Task.Delay(2000, CancellationToken.None);
+                     await bot.DeleteMessageAsync(chatId, msg.MessageId, CancellationToken.None);
+                 }
+                 catch { }
+             }, ct);
+        }
+        catch { }
     }
 
     // Получить эмодзи статуса (для процентов)

@@ -20,21 +20,16 @@ public class GoalCommand(
     private const string WithdrawCategoryName = "← Из целей";
 
     // Точка входа
-    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, long userId, UserFlowState flow, CancellationToken ct, int? messageId = null)
+    // Точка входа
+    public async Task ExecuteAsync(ITelegramBotClient bot, long chatId, long userId, UserFlowState flow, CancellationToken ct, int? messageId = null, string? callbackQueryId = null)
     {
-        if (messageId.HasValue)
-            await ShowMainAsync(bot, chatId, userId, messageId.Value, ct);
-        else
-        {
-            var msg = await bot.SendTextMessageAsync(chatId, "🎯 Загрузка...", cancellationToken: ct);
-            await ShowMainAsync(bot, chatId, userId, msg.MessageId, ct);
-        }
+        await ShowMainAsync(bot, chatId, userId, messageId, ct, callbackQueryId);
     }
 
     // === ЭКРАНЫ ===
 
     // Главная карточка
-    public async Task ShowMainAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct)
+    public async Task ShowMainAsync(ITelegramBotClient bot, long chatId, long userId, int? msgId, CancellationToken ct, string? callbackQueryId = null, string? headerText = null)
     {
         var goals = await goalService.GetUserGoalsAsync(userId, ct);
         
@@ -43,15 +38,15 @@ public class GoalCommand(
             var completed = await goalService.GetCompletedAsync(userId, ct);
             if (completed.Any())
             {
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, 
                     "🎊 *Все цели достигнуты!*\n\nВы прошли все свои финансовые цели!\nСоздайте новую, чтобы продолжить копить.", 
-                    ParseMode.Markdown, replyMarkup: GoalKeyboards.AllCompleted(), cancellationToken: ct);
+                    GoalKeyboards.AllCompleted(), ct, callbackQueryId);
             }
             else
             {
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, 
                     "🎯 *Копилка пуста*\n\nУ вас пока нет финансовых целей.\nСоздайте первую!", 
-                    ParseMode.Markdown, replyMarkup: GoalKeyboards.Empty(), cancellationToken: ct);
+                    GoalKeyboards.Empty(), ct, callbackQueryId);
             }
             return;
         }
@@ -66,12 +61,23 @@ public class GoalCommand(
 
         if (main.CurrentAmount >= main.TargetAmount)
         {
-            await ShowVictoryAsync(bot, chatId, userId, main.Id, msgId, ct);
+            // ShowVictory does not support nullable msgId yet, need to check or update calls
+            // For now, let's assume ShowVictory is called usually with msgId
+            // But wait, if ShowMainAsync is called with null msgId, ShowVictory needs to handle it. 
+            // Let's defer strict check or use SendOrEditAsync there too? 
+            // ShowVictoryAsync signature in file is `int msgId`. I should update it too or handle it here.
+            
+            // Let's try to update ShowVictoryAsync signature as well in a separate chunk.
+            await ShowVictoryAsync(bot, chatId, userId, main.Id, msgId, ct, callbackQueryId);
             return;
         }
 
-        await bot.EditMessageTextAsync(chatId, msgId, BuildGoalCard(main), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+        var text = BuildGoalCard(main);
+        if (!string.IsNullOrEmpty(headerText))
+            text = headerText + "\n\n" + text;
+
+        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, text, 
+            GoalKeyboards.MainKeyboard(), ct, callbackQueryId);
     }
 
     // После создания цели
@@ -95,7 +101,7 @@ public class GoalCommand(
     }
 
     // Экран пополнения
-    public async Task ShowDepositAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct)
+    public async Task ShowDepositAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var main = await goalService.GetActiveGoalAsync(userId, ct);
         var account = await accountService.GetUserAccountAsync(userId, ct);
@@ -114,15 +120,20 @@ public class GoalCommand(
             sb.AppendLine("\n👇 Нажмите кнопку или введите сумму:");
 
         var suggested = GoalKeyboards.CalculateSmartDeposit(balance, remaining);
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.Deposit(suggested), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.Deposit(suggested), ct, callbackQueryId);
     }
 
     // Настройки
-    public async Task ShowSettingsAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct)
+    public async Task ShowSettingsAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct, string? callbackQueryId = null, int? goalId = null)
     {
-        var main = await goalService.GetActiveGoalAsync(userId, ct);
-        if (main == null) { await ShowMainAsync(bot, chatId, userId, msgId, ct); return; }
+        Domain.Entities.Goal? main;
+        if (goalId.HasValue)
+            main = await goalService.GetByIdAsync(userId, goalId.Value, ct);
+        else
+            main = await goalService.GetActiveGoalAsync(userId, ct);
+
+        if (main == null) { await ShowMainAsync(bot, chatId, userId, msgId, ct, callbackQueryId); return; }
 
         var sb = new StringBuilder();
         sb.AppendLine($"⚙️ *Настройки: {main.Name}*\n");
@@ -131,12 +142,12 @@ public class GoalCommand(
         if (main.Deadline.HasValue)
             sb.AppendLine($"📅 Дедлайн: *{main.Deadline:dd.MM.yyyy}*");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.Settings(main.Id), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.Settings(main.Id), ct, callbackQueryId);
     }
 
     // Снятие
-    public async Task ShowWithdrawAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct)
+    public async Task ShowWithdrawAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var main = await goalService.GetActiveGoalAsync(userId, ct);
         var inGoal = main?.CurrentAmount ?? 0;
@@ -154,21 +165,21 @@ public class GoalCommand(
         }
 
         var suggested = GoalKeyboards.CalculateSmartDeposit(inGoal, inGoal);
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.Withdraw(suggested), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.Withdraw(suggested), ct, callbackQueryId);
     }
 
     // Список целей с пагинацией
-    public async Task ShowListAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, int page, CancellationToken ct)
+    public async Task ShowListAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, int page, CancellationToken ct, string? callbackQueryId = null)
     {
         var goals = await goalService.GetUserGoalsAsync(userId, ct);
         var main = await goalService.GetActiveGoalAsync(userId, ct);
 
         if (!goals.Any())
         {
-            await bot.EditMessageTextAsync(chatId, msgId, 
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                 "📋 *Ваши цели*\n\n_Пусто. Создайте первую цель!_", 
-                ParseMode.Markdown, replyMarkup: GoalKeyboards.Empty(), cancellationToken: ct);
+                GoalKeyboards.Empty(), ct, callbackQueryId);
             return;
         }
 
@@ -198,12 +209,12 @@ public class GoalCommand(
 
         sb.AppendLine("👇 *Введите номер цели, чтобы сделать её главной:*");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.List(page, totalPages), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.List(page, totalPages), ct, callbackQueryId);
     }
 
     // Победа
-    public async Task ShowVictoryAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct)
+    public async Task ShowVictoryAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int? msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var goal = await goalService.GetByIdAsync(userId, goalId, ct);
         if (goal == null) return;
@@ -214,12 +225,12 @@ public class GoalCommand(
         sb.AppendLine($"💰 Накоплено: *{goal.CurrentAmount:N0}* TJS из *{goal.TargetAmount:N0}* TJS\n");
         sb.AppendLine("Поздравляем! Вы молодец! 🎊\nЧто делаем с накоплениями?");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.Victory(goalId), cancellationToken: ct);
+        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.Victory(goalId), ct, callbackQueryId);
     }
 
     // Подтверждение удаления
-    public async Task ShowDeleteConfirmAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct)
+    public async Task ShowDeleteConfirmAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var goal = await goalService.GetByIdAsync(userId, goalId, ct);
         if (goal == null) return;
@@ -230,12 +241,12 @@ public class GoalCommand(
             sb.AppendLine($"⚠️ В копилке: *{goal.CurrentAmount:N0}* TJS\nЭти деньги вернутся на баланс.\n");
         sb.AppendLine("Подтвердить удаление?");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.DeleteConfirm(goalId), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.DeleteConfirm(goalId), ct, callbackQueryId);
     }
 
     // Выбор цели для переполнения
-    public async Task ShowOverflowTargetsAsync(ITelegramBotClient bot, long chatId, long userId, decimal amount, int msgId, CancellationToken ct)
+    public async Task ShowOverflowTargetsAsync(ITelegramBotClient bot, long chatId, long userId, decimal amount, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var goals = await goalService.GetUserGoalsAsync(userId, ct);
         var active = goals.Where(g => g.IsActive && g.CurrentAmount < g.TargetAmount).ToList();
@@ -244,14 +255,14 @@ public class GoalCommand(
         sb.AppendLine($"💰 *Перевести {amount:N0} TJS*\n");
         sb.AppendLine("Выберите цель:");
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.OverflowTargets(active, amount), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.OverflowTargets(active, amount), ct, callbackQueryId);
     }
 
     // === ДЕЙСТВИЯ ===
 
     // Пополнение
-    public async Task<bool> DepositAsync(ITelegramBotClient bot, long chatId, long userId, decimal amount, int? msgId, CancellationToken ct)
+    public async Task<bool> DepositAsync(ITelegramBotClient bot, long chatId, long userId, decimal amount, int? msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var account = await accountService.GetUserAccountAsync(userId, ct);
         if (account == null || account.Balance < amount)
@@ -306,8 +317,8 @@ public class GoalCommand(
         {
             sb.AppendLine("\n🎉 *ЦЕЛЬ ДОСТИГНУТА!*");
             if (msgId.HasValue)
-                await bot.EditMessageTextAsync(chatId, msgId.Value, sb.ToString(), ParseMode.Markdown, 
-                    replyMarkup: GoalKeyboards.Victory(main.Id), cancellationToken: ct);
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId.Value, sb.ToString(), 
+                    GoalKeyboards.Victory(main.Id), ct, callbackQueryId);
             else
                 await bot.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, 
                     replyMarkup: GoalKeyboards.Victory(main.Id), cancellationToken: ct);
@@ -316,8 +327,8 @@ public class GoalCommand(
 
         // Обычное пополнение
         if (msgId.HasValue)
-            await bot.EditMessageTextAsync(chatId, msgId.Value, sb.ToString(), ParseMode.Markdown, 
-                replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId.Value, sb.ToString(), 
+                GoalKeyboards.MainKeyboard(), ct, callbackQueryId);
         else
             await bot.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, 
                 replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
@@ -325,7 +336,7 @@ public class GoalCommand(
     }
 
     // Снятие
-    public async Task<bool> WithdrawAsync(ITelegramBotClient bot, long chatId, long userId, decimal amount, int? msgId, CancellationToken ct)
+    public async Task<bool> WithdrawAsync(ITelegramBotClient bot, long chatId, long userId, decimal amount, int? msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var main = await goalService.GetActiveGoalAsync(userId, ct);
         if (main == null || main.CurrentAmount < amount)
@@ -338,12 +349,15 @@ public class GoalCommand(
         if (account == null) return false;
 
         await goalService.WithdrawAsync(userId, main.Id, amount, ct);
-        await accountService.UpdateBalanceAsync(account.Id, account.Balance + amount, ct);
-
-        // Транзакция (доход)
+        
+        // Транзакция (доход) — она сама обновит баланс
         var withdrawCat = await EnsureGoalCategoryAsync(userId, WithdrawCategoryName, TransactionType.Income, ct);
         if (withdrawCat != null)
             await transactionService.ProcessTransactionAsync(userId, withdrawCat.Id, amount, TransactionType.Income, $"← {main.Name}", false, null, ct);
+
+        // Обновим объект аккаунта для отображения
+        account = await accountService.GetUserAccountAsync(userId, ct);
+        if (account == null) return false;
 
         main = await goalService.GetActiveGoalAsync(userId, ct);
         var sb = new StringBuilder();
@@ -356,8 +370,8 @@ public class GoalCommand(
         }
 
         if (msgId.HasValue)
-            await bot.EditMessageTextAsync(chatId, msgId.Value, sb.ToString(), ParseMode.Markdown, 
-                replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId.Value, sb.ToString(), 
+                GoalKeyboards.MainKeyboard(), ct, callbackQueryId);
         else
             await bot.SendTextMessageAsync(chatId, sb.ToString(), ParseMode.Markdown, 
                 replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
@@ -365,7 +379,7 @@ public class GoalCommand(
     }
 
     // Переполнение в другую цель
-    public async Task TransferOverflowAsync(ITelegramBotClient bot, long chatId, long userId, int targetGoalId, decimal amount, int msgId, CancellationToken ct)
+    public async Task TransferOverflowAsync(ITelegramBotClient bot, long chatId, long userId, int targetGoalId, decimal amount, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var goal = await goalService.GetByIdAsync(userId, targetGoalId, ct);
         if (goal == null) return;
@@ -379,27 +393,27 @@ public class GoalCommand(
         goal = await goalService.GetByIdAsync(userId, targetGoalId, ct);
         var percent = goal!.TargetAmount > 0 ? (goal.CurrentAmount / goal.TargetAmount) * 100 : 0;
 
-        await bot.EditMessageTextAsync(chatId, msgId, 
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
             $"✅ *+{amount:N0} TJS* → {goal.Name}\n\n🎯 {goal.Name}: {percent:N0}%", 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+            GoalKeyboards.MainKeyboard(), ct, callbackQueryId);
     }
 
     // Выбор цели
-    public async Task SelectGoalAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct)
+    public async Task SelectGoalAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         await goalService.SetActiveAsync(userId, goalId, ct);
-        await ShowMainAsync(bot, chatId, userId, msgId, ct);
+        await ShowMainAsync(bot, chatId, userId, msgId, ct, callbackQueryId);
     }
 
     // Сделать главной
-    public async Task SetMainAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct)
+    public async Task SetMainAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         await goalService.SetActiveAsync(userId, goalId, ct);
-        await ShowMainAsync(bot, chatId, userId, msgId, ct);
+        await ShowMainAsync(bot, chatId, userId, msgId, ct, callbackQueryId);
     }
 
     // Купил! (Списать)
-    public async Task BoughtAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct)
+    public async Task BoughtAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var goal = await goalService.GetByIdAsync(userId, goalId, ct);
         if (goal == null) return;
@@ -441,12 +455,12 @@ public class GoalCommand(
             sb.AppendLine("Вы прошли все финансовые цели! Создайте новую.");
         }
 
-        await bot.EditMessageTextAsync(chatId, msgId, sb.ToString(), ParseMode.Markdown, 
-            replyMarkup: GoalKeyboards.AfterBought(nextGoal != null), cancellationToken: ct);
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.AfterBought(nextGoal != null), ct, callbackQueryId);
     }
 
     // Удаление
-    public async Task DeleteGoalAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct)
+    public async Task DeleteGoalAsync(ITelegramBotClient bot, long chatId, long userId, int goalId, int msgId, CancellationToken ct, string? callbackQueryId = null)
     {
         var goal = await goalService.GetByIdAsync(userId, goalId, ct);
         if (goal == null) return;
@@ -456,7 +470,6 @@ public class GoalCommand(
             var account = await accountService.GetUserAccountAsync(userId, ct);
             if (account != null)
             {
-                await accountService.UpdateBalanceAsync(account.Id, account.Balance + goal.CurrentAmount, ct);
                 var withdrawCat = await EnsureGoalCategoryAsync(userId, WithdrawCategoryName, TransactionType.Income, ct);
                 if (withdrawCat != null)
                     await transactionService.ProcessTransactionAsync(userId, withdrawCat.Id, goal.CurrentAmount, TransactionType.Income, $"← Удалено: {goal.Name}", false, null, ct);
@@ -464,9 +477,28 @@ public class GoalCommand(
         }
 
         await goalService.DeleteAsync(userId, goalId, ct);
-        await bot.EditMessageTextAsync(chatId, msgId, 
-            $"🗑 Цель «{goal.Name}» удалена.\n{(goal.CurrentAmount > 0 ? $"+{goal.CurrentAmount:N0} TJS возвращено на баланс." : "")}", 
-            ParseMode.Markdown, replyMarkup: GoalKeyboards.MainKeyboard(), cancellationToken: ct);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"🗑 Цель «{goal.Name}» удалена.");
+        if (goal.CurrentAmount > 0)
+            sb.AppendLine($"+{goal.CurrentAmount:N0} TJS возвращено на баланс.");
+
+        // Получаем следующую активную цель, чтобы показать пользователю
+        var remainingGoals = await goalService.GetUserGoalsAsync(userId, ct);
+        var nextActive = remainingGoals.FirstOrDefault(g => g.IsActive);
+        if (nextActive == null && remainingGoals.Any())
+        {
+            nextActive = remainingGoals.First();
+            await goalService.SetActiveAsync(userId, nextActive.Id, ct);
+        }
+
+        if (nextActive != null)
+        {
+             sb.AppendLine($"\n✅ *{nextActive.Name}* — теперь главная цель!");
+        }
+
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(), 
+            GoalKeyboards.MainKeyboard(), ct, callbackQueryId);
     }
 
     // === ХЕЛПЕРЫ ===

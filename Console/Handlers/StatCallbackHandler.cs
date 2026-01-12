@@ -77,7 +77,7 @@ public class StatCallbackHandler(
                 }
                 
                 sFlow.StatsDate = prevDate;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
 
             case "stat:next": // Вперед в будущее
@@ -112,87 +112,87 @@ public class StatCallbackHandler(
                 }
 
                 sFlow.StatsDate = nextDate;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
 
             // ... (other cases)
             case "stat:summary":
                 System.Console.WriteLine("[StatHandler] Case: stat:summary");
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:categories":
                 System.Console.WriteLine("[StatHandler] Case: stat:categories");
                 sFlow.CurrentStatsScreen = StatsScreen.Categories;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:history":
                 System.Console.WriteLine("[StatHandler] Case: stat:history");
                 sFlow.CurrentStatsScreen = StatsScreen.History;
                 sFlow.StatsPage = 1;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:emotions":
                 System.Console.WriteLine("[StatHandler] Case: stat:emotions");
                 sFlow.CurrentStatsScreen = StatsScreen.Emotions;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:regular":
                 System.Console.WriteLine("[StatHandler] Case: stat:regular");
                 sFlow.CurrentStatsScreen = StatsScreen.Regular;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:period":
                 System.Console.WriteLine("[StatHandler] Case: stat:period");
                 sFlow.CurrentStatsScreen = StatsScreen.PeriodSelect;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:period:week":
                 System.Console.WriteLine("[StatHandler] Case: stat:period:week");
                 sFlow.StatsPeriod = StatsPeriod.Week;
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:period:month":
                 System.Console.WriteLine("[StatHandler] Case: stat:period:month");
                 sFlow.StatsPeriod = StatsPeriod.Month;
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:period:year":
                 System.Console.WriteLine("[StatHandler] Case: stat:period:year");
                 sFlow.StatsPeriod = StatsPeriod.Year;
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:period:all":
                 System.Console.WriteLine("[StatHandler] Case: stat:period:all");
                 sFlow.StatsPeriod = StatsPeriod.AllTime;
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:cat:exp":
                 System.Console.WriteLine("[StatHandler] Case: stat:cat:exp");
                 sFlow.StatsShowExpenses = true;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:cat:inc":
                 System.Console.WriteLine("[StatHandler] Case: stat:cat:inc");
                 sFlow.StatsShowExpenses = false;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:page:prev":
                 if (sFlow.StatsPage > 1) sFlow.StatsPage--;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:page:next":
                 sFlow.StatsPage++;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId, cb.Id);
                 return true;
             case "stat:back":
                 flowDict.Remove(userId);
-                await bot.EditMessageTextAsync(chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
-                    replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
+                    BotInlineKeyboards.MainMenu(), ct, cb.Id);
                 return true;
             case "stat:export":
                 var csv = await GenerateCsvAsync(userId, sFlow, ct);

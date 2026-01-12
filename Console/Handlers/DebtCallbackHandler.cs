@@ -33,35 +33,32 @@ public class DebtCallbackHandler(
         {
             case "debt:main":
                 dFlow.Step = UserFlowStep.None;
-                await debtCmd.ShowDashboardAsync(bot, chatId, userId, msgId, ct);
+                await debtCmd.ShowDashboardAsync(bot, chatId, userId, msgId, ct, cb.Id);
                 return true;
 
             case "debt:noop":
                 return true;
 
             case "debt:create":
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     "💸 *Новый долг*\n\nВыберите тип:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.CreateType(), cancellationToken: ct);
+                    DebtKeyboards.CreateType(), ct, cb.Id);
                 return true;
 
             case "debt:create:theyowe":
                 dFlow.Step = UserFlowStep.WaitingDebtName;
                 dFlow.PendingDebtType = DebtType.TheyOwe;
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     "📥 *Новый долг: Мне должны*\n\nКто вам должен?\nВведите имя:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.Cancel(), cancellationToken: ct);
+                    DebtKeyboards.Cancel(), ct, cb.Id);
                 return true;
 
             case "debt:create:iowe":
                 dFlow.Step = UserFlowStep.WaitingDebtName;
                 dFlow.PendingDebtType = DebtType.IOwe;
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     "📤 *Новый долг: Я должен*\n\nКому вы должны?\nВведите имя:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.Cancel(), cancellationToken: ct);
+                    DebtKeyboards.Cancel(), ct, cb.Id);
                 return true;
         }
 
@@ -84,7 +81,7 @@ public class DebtCallbackHandler(
             var page = 0;
             if (data.Split(':').Length > 3 && int.TryParse(data.Split(':')[3], out var p)) page = p;
             dFlow.PendingListPage = page;
-            await debtCmd.ShowListAsync(bot, chatId, userId, msgId, DebtType.IOwe, page, ct);
+            await debtCmd.ShowListAsync(bot, chatId, userId, msgId, DebtType.IOwe, page, ct, cb.Id);
             return true;
         }
 
@@ -94,7 +91,7 @@ public class DebtCallbackHandler(
             if (int.TryParse(data.Split(':')[2], out var debtId))
             {
                 dFlow.Step = UserFlowStep.None;
-                await debtCmd.ShowDetailAsync(bot, chatId, userId, debtId, msgId, ct);
+                await debtCmd.ShowDetailAsync(bot, chatId, userId, debtId, msgId, ct, cb.Id);
             }
             return true;
         }
@@ -103,7 +100,7 @@ public class DebtCallbackHandler(
         if (data.StartsWith("debt:history:"))
         {
             if (int.TryParse(data.Split(':')[2], out var debtId))
-                await debtCmd.ShowHistoryAsync(bot, chatId, userId, debtId, msgId, ct);
+                await debtCmd.ShowHistoryAsync(bot, chatId, userId, debtId, msgId, ct, cb.Id);
             return true;
         }
 
@@ -121,10 +118,9 @@ public class DebtCallbackHandler(
                 var isTheyOwe = debt.Type == DebtType.TheyOwe;
                 var label = isTheyOwe ? "Получить" : "Внести";
 
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"💵 *{label} платёж: {debt.PersonName}*\n\n💰 Осталось: *{debt.RemainingAmount:N0}* TJS\n\nВведите сумму:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.Cancel(), cancellationToken: ct);
+                    DebtKeyboards.Cancel(), ct, cb.Id);
             }
             return true;
         }
@@ -137,10 +133,9 @@ public class DebtCallbackHandler(
                 var debt = await debtService.GetByIdAsync(userId, debtId, ct);
                 if (debt == null) return true;
 
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"🗑 *Удаление: {debt.PersonName}*\n\n💰 Остаток: *{debt.RemainingAmount:N0}* TJS\n\n⚠️ Это действие нельзя отменить!\n\nПодтвердить?",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.DeleteConfirm(debtId), cancellationToken: ct);
+                    DebtKeyboards.DeleteConfirm(debtId), ct, cb.Id);
             }
             return true;
         }
@@ -148,7 +143,7 @@ public class DebtCallbackHandler(
         if (data.StartsWith("debt:delete:confirm:"))
         {
             if (int.TryParse(data.Split(':')[3], out var debtId))
-                await debtCmd.DeleteAsync(bot, chatId, userId, debtId, msgId, ct);
+                await debtCmd.DeleteAsync(bot, chatId, userId, debtId, msgId, ct, cb.Id);
             return true;
         }
 
@@ -157,10 +152,9 @@ public class DebtCallbackHandler(
         {
             if (int.TryParse(data.Split(':')[2], out var debtId))
             {
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     "✏️ *Редактирование*\n\nЧто изменить?",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.Edit(debtId), cancellationToken: ct);
+                    DebtKeyboards.Edit(debtId), ct, cb.Id);
             }
             return true;
         }
@@ -172,10 +166,9 @@ public class DebtCallbackHandler(
                 dFlow.Step = UserFlowStep.WaitingDebtEditName;
                 dFlow.PendingDebtId = debtId;
                 var debt = await debtService.GetByIdAsync(userId, debtId, ct);
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"👤 *Новое имя*\n\nТекущее: {debt?.PersonName}\n\nВведите новое:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.Cancel(), cancellationToken: ct);
+                    DebtKeyboards.Cancel(), ct, cb.Id);
             }
             return true;
         }
@@ -188,10 +181,9 @@ public class DebtCallbackHandler(
                 dFlow.PendingDebtId = debtId;
                 var debt = await debtService.GetByIdAsync(userId, debtId, ct);
                 var current = debt?.DueDate.HasValue == true ? debt.DueDate.Value.ToString("dd.MM.yyyy") : "не установлен";
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"📅 *Новый дедлайн*\n\nТекущий: {current}\n\nВведите (ДД.ММ.ГГГГ) или «нет»:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.Cancel(), cancellationToken: ct);
+                    DebtKeyboards.Cancel(), ct, cb.Id);
             }
             return true;
         }
@@ -204,10 +196,9 @@ public class DebtCallbackHandler(
                 dFlow.PendingDebtId = debtId;
                 var debt = await debtService.GetByIdAsync(userId, debtId, ct);
                 var current = string.IsNullOrEmpty(debt?.Description) ? "не указано" : debt.Description;
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"📝 *Новое описание*\n\nТекущее: {current}\n\nВведите новое или «нет»:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: DebtKeyboards.Cancel(), cancellationToken: ct);
+                    DebtKeyboards.Cancel(), ct, cb.Id);
             }
             return true;
         }
@@ -217,10 +208,9 @@ public class DebtCallbackHandler(
         {
             dFlow.PendingDebtDeadline = null;
             dFlow.Step = UserFlowStep.WaitingDebtDescription;
-            await bot.EditMessageTextAsync(chatId, msgId,
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                 "📅 Дедлайн: _пропущен_\n\nДобавьте описание (за что долг):",
-                Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                replyMarkup: DebtKeyboards.Skip("debt:skip:desc"), cancellationToken: ct);
+                DebtKeyboards.Skip("debt:skip:desc"), ct, cb.Id);
             return true;
         }
 

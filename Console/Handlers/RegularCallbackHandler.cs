@@ -34,7 +34,7 @@ public class RegularCallbackHandler(
         {
             case "regular:main":
                 rFlow.Step = UserFlowStep.None;
-                await regularCmd.ShowDashboardAsync(bot, chatId, userId, msgId, ct);
+                await regularCmd.ShowDashboardAsync(bot, chatId, userId, msgId, ct, cb.Id);
                 return true;
 
             case "regular:noop":
@@ -43,15 +43,14 @@ public class RegularCallbackHandler(
             case "regular:list":
                 rFlow.Step = UserFlowStep.WaitingRegularSelect;
                 rFlow.PendingListPage = 0;
-                await regularCmd.ShowListAsync(bot, chatId, userId, msgId, 0, ct);
+                await regularCmd.ShowListAsync(bot, chatId, userId, msgId, 0, ct, cb.Id);
                 return true;
 
             case "regular:create":
                 rFlow.Step = UserFlowStep.WaitingRegularName;
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     "📝 *Новый регулярный платёж*\n\nВведите название:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: RegularKeyboards.Cancel(), cancellationToken: ct);
+                    RegularKeyboards.Cancel(), ct, cb.Id);
                 return true;
         }
 
@@ -62,7 +61,7 @@ public class RegularCallbackHandler(
             {
                 rFlow.Step = UserFlowStep.WaitingRegularSelect;
                 rFlow.PendingListPage = page;
-                await regularCmd.ShowListAsync(bot, chatId, userId, msgId, page, ct);
+                await regularCmd.ShowListAsync(bot, chatId, userId, msgId, page, ct, cb.Id);
             }
             return true;
         }
@@ -73,7 +72,7 @@ public class RegularCallbackHandler(
             if (int.TryParse(data.Split(':')[2], out var paymentId))
             {
                 rFlow.Step = UserFlowStep.None;
-                await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct);
+                await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct, cb.Id);
             }
             return true;
         }
@@ -82,7 +81,7 @@ public class RegularCallbackHandler(
         if (data.StartsWith("regular:history:"))
         {
             if (int.TryParse(data.Split(':')[2], out var paymentId))
-                await regularCmd.ShowHistoryAsync(bot, chatId, userId, paymentId, msgId, ct);
+                await regularCmd.ShowHistoryAsync(bot, chatId, userId, paymentId, msgId, ct, cb.Id);
             return true;
         }
 
@@ -100,7 +99,7 @@ public class RegularCallbackHandler(
             if (int.TryParse(data.Split(':')[2], out var paymentId))
             {
                 await regularService.SetPausedAsync(userId, paymentId, true, ct);
-                await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct);
+                await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct, cb.Id);
             }
             return true;
         }
@@ -110,7 +109,7 @@ public class RegularCallbackHandler(
             if (int.TryParse(data.Split(':')[2], out var paymentId))
             {
                 await regularService.SetPausedAsync(userId, paymentId, false, ct);
-                await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct);
+                await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct, cb.Id);
             }
             return true;
         }
@@ -122,10 +121,9 @@ public class RegularCallbackHandler(
             {
                 var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
                 if (payment == null) return true;
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"🗑 *Удаление: {payment.Name}*\n\n💰 {payment.Amount:N0} TJS\n\n⚠️ История платежей будет потеряна!\n\nПодтвердить?",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: RegularKeyboards.DeleteConfirm(paymentId), cancellationToken: ct);
+                    RegularKeyboards.DeleteConfirm(paymentId), ct, cb.Id);
             }
             return true;
         }
@@ -133,7 +131,7 @@ public class RegularCallbackHandler(
         if (data.StartsWith("regular:delete:confirm:"))
         {
             if (int.TryParse(data.Split(':')[3], out var paymentId))
-                await regularCmd.DeleteAsync(bot, chatId, userId, paymentId, msgId, ct);
+                await regularCmd.DeleteAsync(bot, chatId, userId, paymentId, msgId, ct, cb.Id);
             return true;
         }
 
@@ -142,10 +140,9 @@ public class RegularCallbackHandler(
         {
             if (int.TryParse(data.Split(':')[2], out var paymentId))
             {
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     "✏️ *Редактирование*\n\nЧто изменить?",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: RegularKeyboards.Edit(paymentId), cancellationToken: ct);
+                    RegularKeyboards.Edit(paymentId), ct, cb.Id);
             }
             return true;
         }
@@ -157,10 +154,9 @@ public class RegularCallbackHandler(
                 rFlow.Step = UserFlowStep.WaitingRegularEditName;
                 rFlow.PendingRegularId = paymentId;
                 var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"📝 *Новое название*\n\nТекущее: {payment?.Name}\n\nВведите:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: RegularKeyboards.Cancel(), cancellationToken: ct);
+                    RegularKeyboards.Cancel(), ct, cb.Id);
             }
             return true;
         }
@@ -172,10 +168,9 @@ public class RegularCallbackHandler(
                 rFlow.Step = UserFlowStep.WaitingRegularEditAmount;
                 rFlow.PendingRegularId = paymentId;
                 var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"💰 *Новая сумма*\n\nТекущая: {payment?.Amount:N0} TJS\n\nВведите:",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: RegularKeyboards.Cancel(), cancellationToken: ct);
+                    RegularKeyboards.Cancel(), ct, cb.Id);
             }
             return true;
         }
@@ -188,10 +183,9 @@ public class RegularCallbackHandler(
                 rFlow.PendingRegularId = paymentId;
                 var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
                 var current = payment?.DayOfMonth?.ToString() ?? "не установлен";
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     $"📅 *Новая дата*\n\nТекущая: {current} числа\n\nВведите число (1-31):",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: RegularKeyboards.Cancel(), cancellationToken: ct);
+                    RegularKeyboards.Cancel(), ct, cb.Id);
             }
             return true;
         }
@@ -208,10 +202,9 @@ public class RegularCallbackHandler(
                 ).ToList();
                 buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("⏭ Без категории", $"regular:setcat:{paymentId}:0") });
                 buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("❌ Отмена", $"regular:detail:{paymentId}") });
-                await bot.EditMessageTextAsync(chatId, msgId,
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                     "📂 *Выберите категорию:*",
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    replyMarkup: new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons), cancellationToken: ct);
+                    new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons), ct, cb.Id);
             }
             return true;
         }
@@ -226,7 +219,7 @@ public class RegularCallbackHandler(
                 {
                     await regularService.UpdateAsync(userId, paymentId, payment.Name, payment.Amount, catId == 0 ? null : catId, ct);
                     rFlow.Step = UserFlowStep.None;
-                    await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct);
+                    await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct, cb.Id);
                 }
             }
             return true;
@@ -250,17 +243,16 @@ public class RegularCallbackHandler(
                 ? "Введите день недели (1=Пн, 7=Вс):" 
                 : "Введите число (1-31):";
 
-            await bot.EditMessageTextAsync(chatId, msgId,
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
                 $"🔄 Периодичность: *{GetFreqName(freq)}*\n\n{datePrompt}",
-                Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                replyMarkup: RegularKeyboards.DayOfMonth(), cancellationToken: ct);
+                RegularKeyboards.DayOfMonth(), ct, cb.Id);
             return true;
         }
 
         if (data == "regular:day:last")
         {
             rFlow.PendingRegularDayOfMonth = 0; // 0 = последний день
-            return await ShowCategorySelectionAsync(bot, chatId, userId, msgId, rFlow, ct);
+            return await ShowCategorySelectionAsync(bot, chatId, userId, msgId, rFlow, ct, cb.Id);
         }
 
         if (data.StartsWith("regular:cat:"))
@@ -281,7 +273,7 @@ public class RegularCallbackHandler(
         return false;
     }
 
-    private async Task<bool> ShowCategorySelectionAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, UserFlowState flow, CancellationToken ct)
+    private async Task<bool> ShowCategorySelectionAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, UserFlowState flow, CancellationToken ct, string? callbackQueryId = null)
     {
         flow.Step = UserFlowStep.None;
         var cats = await categoryService.GetByTypeAsync(userId, TransactionType.Expense, ct);
@@ -290,10 +282,9 @@ public class RegularCallbackHandler(
         ).ToList();
         buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("⏭ Без категории", "regular:cat:skip") });
         buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("❌ Отмена", "regular:main") });
-        await bot.EditMessageTextAsync(chatId, msgId,
+        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
             "📂 Выберите категорию:",
-            Telegram.Bot.Types.Enums.ParseMode.Markdown,
-            replyMarkup: new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons), cancellationToken: ct);
+            new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons), ct, callbackQueryId);
         return true;
     }
 

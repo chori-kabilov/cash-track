@@ -1,5 +1,6 @@
 using Console.Bot;
 using Console.Bot.Keyboards;
+using Console.Commands;
 using Domain.Enums;
 using Infrastructure.Services;
 using Telegram.Bot;
@@ -58,7 +59,7 @@ public class TransactionFlowHandler(
         if (!FlowHelper.TryParseAmount(parts[0], out var amount) || amount <= 0)
         {
             var errorText = "❌ *Неверный формат*\n\nВведите сумму числом, например: `500` или `1500 зарплата`";
-            await EditOrSendAsync(bot, chatId, flow.PendingMessageId, errorText, 
+            await CommandHelpers.SendOrEditAsync(bot, chatId, flow.PendingMessageId, errorText, 
                 flow.PendingType == TransactionType.Expense ? TransactionKeyboards.ExpenseStart(flow.PendingIsImpulsive) : TransactionKeyboards.IncomeStart(), ct);
             return true;
         }
@@ -111,7 +112,7 @@ public class TransactionFlowHandler(
     {
         var typeLabel = type == TransactionType.Income ? "дохода" : "расхода";
         var text = $"✏️ *Новая категория*\n\nВведите название для категории {typeLabel}:";
-        await EditOrSendAsync(bot, chatId, msgId, text, TransactionKeyboards.NewCategoryInput(), ct);
+        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, text, TransactionKeyboards.NewCategoryInput(), ct);
     }
 
     #endregion
@@ -147,7 +148,7 @@ public class TransactionFlowHandler(
                 var category = await categoryService.GetCategoryByIdAsync(userId, categoryId, ct);
                 var catName = category != null ? $"{category.Icon} {category.Name}" : "категория";
                 var blockedText = $"🔒 *Категория заблокирована*\n\n{catName}\n\n_Лимит превышен. Попробуйте другую категорию._";
-                await EditOrSendAsync(bot, chatId, flow.PendingMessageId, blockedText, BotInlineKeyboards.MainMenu(), ct);
+                await CommandHelpers.SendOrEditAsync(bot, chatId, flow.PendingMessageId, blockedText, BotInlineKeyboards.MainMenu(), ct);
                 return (null, null);
             }
 
@@ -161,8 +162,8 @@ public class TransactionFlowHandler(
             
             if (flow.PendingMessageId.HasValue)
             {
-                await bot.EditMessageTextAsync(chatId, flow.PendingMessageId.Value, resultText,
-                    ParseMode.Markdown, replyMarkup: TransactionKeyboards.TransactionConfirm(), cancellationToken: ct);
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, flow.PendingMessageId.Value, resultText,
+                    TransactionKeyboards.TransactionConfirm(), ct);
                 return (txn.Id, flow.PendingMessageId);
             }
             else
@@ -198,7 +199,7 @@ public class TransactionFlowHandler(
                    $"━━━━━━━━━━━━━━\n\n" +
                    $"Что дальше?";
         
-        await EditOrSendAsync(bot, chatId, msgId, text, TransactionKeyboards.AfterTransaction(), ct);
+        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, text, TransactionKeyboards.AfterTransaction(), ct);
     }
 
     
@@ -206,7 +207,7 @@ public class TransactionFlowHandler(
     public async Task ShowCancelledAsync(ITelegramBotClient bot, long chatId, int? msgId, CancellationToken ct)
     {
         var text = "🏠 *Главное меню*\n\n↩️ _Запись отменена_\n\nВыберите действие:";
-        await EditOrSendAsync(bot, chatId, msgId, text, BotInlineKeyboards.MainMenu(), ct);
+        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, text, BotInlineKeyboards.MainMenu(), ct);
     }
 
     

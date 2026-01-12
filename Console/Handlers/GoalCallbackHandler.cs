@@ -32,40 +32,58 @@ public class GoalCallbackHandler(
         {
             case "goal:main":
                 gFlow.Step = UserFlowStep.None;
-                await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct);
+                await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct, cb.Id);
                 return true;
 
             case "goal:deposit":
                 gFlow.Step = UserFlowStep.WaitingGoalDeposit;
                 var mainDep = await goalService.GetActiveGoalAsync(userId, ct);
                 gFlow.PendingGoalId = mainDep?.Id;
-                await goalCmd.ShowDepositAsync(bot, chatId, userId, msgId, ct);
+                await goalCmd.ShowDepositAsync(bot, chatId, userId, msgId, ct, cb.Id);
                 return true;
 
             case "goal:withdraw":
                 gFlow.Step = UserFlowStep.WaitingGoalWithdraw;
                 var mainWd = await goalService.GetActiveGoalAsync(userId, ct);
                 gFlow.PendingGoalId = mainWd?.Id;
-                await goalCmd.ShowWithdrawAsync(bot, chatId, userId, msgId, ct);
+                await goalCmd.ShowWithdrawAsync(bot, chatId, userId, msgId, ct, cb.Id);
                 return true;
 
             case "goal:settings":
                 gFlow.Step = UserFlowStep.None;
-                await goalCmd.ShowSettingsAsync(bot, chatId, userId, msgId, ct);
+                await goalCmd.ShowSettingsAsync(bot, chatId, userId, msgId, ct, cb.Id);
+                return true;
+
+            // Handle split settings with ID
+            case string s when s.StartsWith("goal:settings:"):
+                if (int.TryParse(s.Split(':')[2], out var sGoalId))
+                {
+                    gFlow.Step = UserFlowStep.None;
+                    // We need a method ShowSettingsAsync that takes an ID, or we SetActive then ShowSettings?
+                    // GoalCommand.ShowSettingsAsync gets ActiveGoal.
+                    // We should probably set this goal as active if we want to view its settings?
+                    // Or update ShowSettingsAsync to take an optional goalId.
+                    // Let's assume for now we set it active (Select it) then show settings?
+                    // But 'Select' usually shows Main card.
+                    // Let's check GoalCommand.ShowSettingsAsync.
+                    // It uses GetActiveGoalAsync. 
+                    // To show settings for a SPECIFIC goal, we must make it active OR update ShowSettingsAsync.
+                    // Let's update ShowSettingsAsync to accept optional goalId.
+                    await goalCmd.ShowSettingsAsync(bot, chatId, userId, msgId, ct, cb.Id, sGoalId);
+                }
                 return true;
 
             case "goal:list":
                 gFlow.Step = UserFlowStep.WaitingGoalSelect;
                 gFlow.PendingListPage = 0;
-                await goalCmd.ShowListAsync(bot, chatId, userId, msgId, 0, ct);
+                await goalCmd.ShowListAsync(bot, chatId, userId, msgId, 0, ct, cb.Id);
                 return true;
 
             case "goal:create":
                 gFlow.Step = UserFlowStep.WaitingGoalName;
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     "🎯 *Новая цель*\n\nВведите название:", 
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
-                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
+                    GoalKeyboards.Cancel(), ct, cb.Id);
                 return true;
 
             case "goal:noop":
@@ -78,7 +96,7 @@ public class GoalCallbackHandler(
             if (int.TryParse(data.Split(':')[2], out var page))
             {
                 gFlow.PendingListPage = page;
-                await goalCmd.ShowListAsync(bot, chatId, userId, msgId, page, ct);
+                await goalCmd.ShowListAsync(bot, chatId, userId, msgId, page, ct, cb.Id);
             }
             return true;
         }
@@ -132,14 +150,14 @@ public class GoalCallbackHandler(
         // === ПОБЕДА ===
         if (data.StartsWith("goal:bought:"))
         {
-            if (int.TryParse(data.Split(':')[2], out var goalId))
-                await goalCmd.BoughtAsync(bot, chatId, userId, goalId, msgId, ct);
+            if (int.TryParse(data.Split(':')[2], out var mGoalId))
+                await goalCmd.SetMainAsync(bot, chatId, userId, mGoalId, msgId, ct, cb.Id);
             return true;
         }
 
         if (data.StartsWith("goal:continue:"))
         {
-            await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct);
+            await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct, cb.Id);
             return true;
         }
 
@@ -150,7 +168,7 @@ public class GoalCallbackHandler(
             if (decimal.TryParse(amountStr, out var amount))
             {
                 gFlow.PendingAmount = amount;
-                await goalCmd.ShowOverflowTargetsAsync(bot, chatId, userId, amount, msgId, ct);
+                await goalCmd.ShowOverflowTargetsAsync(bot, chatId, userId, amount, msgId, ct, cb.Id);
             }
             return true;
         }
@@ -158,7 +176,7 @@ public class GoalCallbackHandler(
         if (data.StartsWith("goal:overflow:keep:"))
         {
             gFlow.Step = UserFlowStep.None;
-            await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct);
+            await goalCmd.ShowMainAsync(bot, chatId, userId, msgId, ct, cb.Id);
             return true;
         }
 
@@ -167,7 +185,7 @@ public class GoalCallbackHandler(
             var parts = data.Split(':');
             if (parts.Length >= 5 && int.TryParse(parts[3], out var targetId) && decimal.TryParse(parts[4], out var amount))
             {
-                await goalCmd.TransferOverflowAsync(bot, chatId, userId, targetId, amount, msgId, ct);
+                await goalCmd.TransferOverflowAsync(bot, chatId, userId, targetId, amount, msgId, ct, cb.Id);
             }
             return true;
         }
@@ -176,14 +194,14 @@ public class GoalCallbackHandler(
         if (data.StartsWith("goal:delete:") && !data.Contains("confirm"))
         {
             if (int.TryParse(data.Split(':')[2], out var goalId))
-                await goalCmd.ShowDeleteConfirmAsync(bot, chatId, userId, goalId, msgId, ct);
+                await goalCmd.ShowDeleteConfirmAsync(bot, chatId, userId, goalId, msgId, ct, cb.Id);
             return true;
         }
 
         if (data.StartsWith("goal:delete:confirm:"))
         {
-            if (int.TryParse(data.Split(':')[3], out var goalId))
-                await goalCmd.DeleteGoalAsync(bot, chatId, userId, goalId, msgId, ct);
+            if (int.TryParse(data.Split(':')[3], out var gId))
+                await goalCmd.DeleteGoalAsync(bot, chatId, userId, gId, msgId, ct, cb.Id);
             return true;
         }
 
@@ -195,10 +213,9 @@ public class GoalCallbackHandler(
                 gFlow.Step = UserFlowStep.WaitingGoalEditName;
                 gFlow.PendingGoalId = goalId;
                 var goal = await goalService.GetByIdAsync(userId, goalId, ct);
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     $"✏️ *Новое название*\n\nТекущее: {goal?.Name}\n\nВведите новое название:", 
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
-                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
+                    GoalKeyboards.Cancel($"goal:settings:{goalId}"), ct, cb.Id);
             }
             return true;
         }
@@ -210,10 +227,9 @@ public class GoalCallbackHandler(
                 gFlow.Step = UserFlowStep.WaitingGoalEditAmount;
                 gFlow.PendingGoalId = goalId;
                 var goal = await goalService.GetByIdAsync(userId, goalId, ct);
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     $"💵 *Новая сумма*\n\nТекущая: {goal?.TargetAmount:N0} TJS\n\nВведите новую сумму:", 
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
-                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
+                    GoalKeyboards.Cancel($"goal:settings:{goalId}"), ct, cb.Id);
             }
             return true;
         }
@@ -226,10 +242,9 @@ public class GoalCallbackHandler(
                 gFlow.PendingGoalId = goalId;
                 var goal = await goalService.GetByIdAsync(userId, goalId, ct);
                 var current = goal?.Deadline.HasValue == true ? goal.Deadline.Value.ToString("dd.MM.yyyy") : "не установлен";
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     $"📅 *Новый дедлайн*\n\nТекущий: {current}\n\nВведите (ДД.ММ.ГГГГ) или «нет»:", 
-                    Telegram.Bot.Types.Enums.ParseMode.Markdown, 
-                    replyMarkup: GoalKeyboards.Cancel(), cancellationToken: ct);
+                    GoalKeyboards.Cancel($"goal:settings:{goalId}"), ct, cb.Id);
             }
             return true;
         }

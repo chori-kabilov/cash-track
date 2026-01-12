@@ -6,6 +6,7 @@ using Infrastructure.Services;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Console.Commands;
 
 namespace Console.Handlers;
 
@@ -24,8 +25,8 @@ public class GlobalCallbackHandler(
         if (data == "action:cancel:edit")
         {
             flowDict.Remove(userId);
-            await bot.EditMessageTextAsync(chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
-                ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
+                BotInlineKeyboards.MainMenu(), ct, cb.Id);
             return true;
         }
 
@@ -35,8 +36,8 @@ public class GlobalCallbackHandler(
             flowDict.Remove(userId);
             try
             {
-                await bot.EditMessageTextAsync(chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
-                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
+                    BotInlineKeyboards.MainMenu(), ct, cb.Id);
             }
             catch
             {
@@ -68,8 +69,8 @@ public class GlobalCallbackHandler(
         // === РЕТРАЙ (повторить после отмены) ===
         if (data == "menu:retry")
         {
-            await bot.EditMessageTextAsync(chatId, msgId, "💵 Выберите тип операции:", 
-                ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, "💵 Выберите тип операции:", 
+                BotInlineKeyboards.MainMenu(), ct, cb.Id);
             return true;
         }
         
@@ -81,15 +82,15 @@ public class GlobalCallbackHandler(
             {
                 await transactionService.CancelAsync(lastTx.Id, ct);
                 var sign = lastTx.Type == TransactionType.Income ? "+" : "-";
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     $"✅ *Транзакция отменена*\n\n{sign}{lastTx.Amount:N0} TJS — {lastTx.Category?.Name}", 
-                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                    BotInlineKeyboards.MainMenu(), ct, cb.Id);
             }
             else
             {
-                await bot.EditMessageTextAsync(chatId, msgId, 
+                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, 
                     "❌ *Нет транзакций для отмены*", 
-                    ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
+                    BotInlineKeyboards.MainMenu(), ct, cb.Id);
             }
             return true;
         }

@@ -45,14 +45,17 @@ public static class GoalKeyboards
     // Настройки цели
     public static InlineKeyboardMarkup Settings(int goalId) => new(new[]
     {
-        new[] { InlineKeyboardButton.WithCallbackData("➖ Взять деньги", "goal:withdraw") },
         new[]
         {
             InlineKeyboardButton.WithCallbackData("✏️ Название", $"goal:edit:name:{goalId}"),
             InlineKeyboardButton.WithCallbackData("💵 Сумма", $"goal:edit:amount:{goalId}")
         },
         new[] { InlineKeyboardButton.WithCallbackData("📅 Дедлайн", $"goal:edit:deadline:{goalId}") },
-        new[] { InlineKeyboardButton.WithCallbackData("🗑 Удалить цель", $"goal:delete:{goalId}") },
+        new[] 
+        { 
+            InlineKeyboardButton.WithCallbackData("➖ Взять", "goal:withdraw"),
+            InlineKeyboardButton.WithCallbackData("🗑 Удалить", $"goal:delete:{goalId}") 
+        },
         new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "goal:main") }
     });
 
@@ -167,9 +170,9 @@ public static class GoalKeyboards
     });
 
     // Отмена
-    public static InlineKeyboardMarkup Cancel() => new(new[]
+    public static InlineKeyboardMarkup Cancel(string callbackData = "goal:main") => new(new[]
     {
-        new[] { InlineKeyboardButton.WithCallbackData("🔙 Отмена", "goal:main") }
+        new[] { InlineKeyboardButton.WithCallbackData("🔙 Отмена", callbackData) }
     });
 
     // Умный расчёт суммы для пополнения с учётом цели

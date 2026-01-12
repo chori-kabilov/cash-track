@@ -31,7 +31,8 @@ public class BalanceCommand(
         long userId, 
         UserFlowState? flowState,
         CancellationToken ct, 
-        int? msgId = null)
+        int? msgId = null,
+        string? callbackQueryId = null)
     {
         // Загружаем данные
         var account = await accountService.GetUserAccountAsync(userId, ct)
@@ -52,7 +53,7 @@ public class BalanceCommand(
         var keyboard = BotInlineKeyboards.BalanceDashboard(
             balanceData.ShowDebts, balanceData.ShowGoals, balanceData.ShowPayments);
 
-        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, text, keyboard, ct);
+        await CommandHelpers.SendOrEditAsync(bot, chatId, msgId, text, keyboard, ct, callbackQueryId);
     }
 
     #endregion

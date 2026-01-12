@@ -16,14 +16,14 @@ public class LimitCommand(ILimitService limitService, ICategoryService categoryS
 
     
     // Показать меню лимитов
-    public async Task ShowMenuAsync(ITelegramBotClient bot, long chatId, long userId, CancellationToken ct, int? msgId = null)
+    public async Task ShowMenuAsync(ITelegramBotClient bot, long chatId, long userId, CancellationToken ct, int? msgId = null, string? callbackQueryId = null)
     {
         var limits = await limitService.GetUserLimitsAsync(userId, ct);
         var (text, buttons) = BuildLimitsMenu(limits);
 
         if (msgId.HasValue)
-            await bot.EditMessageTextAsync(chatId, msgId.Value, text, ParseMode.Markdown, 
-                replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId.Value, text, 
+                new InlineKeyboardMarkup(buttons), ct, callbackQueryId);
         else
             await bot.SendTextMessageAsync(chatId, text, ParseMode.Markdown, 
                 replyMarkup: new InlineKeyboardMarkup(buttons), cancellationToken: ct);
