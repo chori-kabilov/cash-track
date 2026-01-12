@@ -170,6 +170,29 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
         return result;
     }
 
+    public async Task<IReadOnlyList<(Category Category, decimal Amount)>> GetTopIncomesAsync(long userId, DateTimeOffset fromDate, int count, CancellationToken cancellationToken = default)
+    {
+        var grouped = await context.Transactions
+            .AsNoTracking()
+            .Where(t => t.Account.UserId == userId && t.Date >= fromDate && t.Type == TransactionType.Income && !t.IsDeleted)
+            .GroupBy(t => t.CategoryId)
+            .Select(g => new { CategoryId = g.Key, Total = g.Sum(t => t.Amount) })
+            .OrderByDescending(x => x.Total)
+            .Take(count)
+            .ToListAsync(cancellationToken);
+
+        var result = new List<(Category Category, decimal Amount)>();
+        foreach (var item in grouped)
+        {
+            var category = await context.Categories.FindAsync(new object[] { item.CategoryId }, cancellationToken);
+            if (category != null)
+            {
+                result.Add((category, item.Total));
+            }
+        }
+        return result;
+    }
+
     public async Task<Transaction> ProcessTransactionAsync(
         long userId,
         int categoryId,
@@ -314,10 +337,12 @@ public sealed class TransactionService(DataContext context) : ITransactionServic
         return true;
     }
 
-    // Получить расходы за период (для прогноза)
+    // Получить расходы за период (для прогноза и статистики)
     public async Task<IReadOnlyList<Transaction>> GetExpensesByPeriodAsync(long userId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
     {
         return await context.Transactions
+            .AsNoTracking()
+            .Include(t => t.Category)
             .Where(t => t.Account!.UserId == userId 
                 && !t.IsDeleted 
                 && t.Type == TransactionType.Expense

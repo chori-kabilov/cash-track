@@ -52,8 +52,14 @@ public class BalanceCallbackHandler(
         {
             var transactions = await transactionService.GetUserTransactionsAsync(userId, 10, ct);
             var lines = transactions.Select(t => 
-                $"{(t.Type == TransactionType.Income ? "+" : "-")}{t.Amount:F0} {t.Category?.Icon} {t.Description ?? t.Category?.Name}");
-            var text = "📊 *Последние операции:*\n\n" + string.Join("\n", lines);
+            {
+                var icon = t.Type == TransactionType.Income ? "🟢" : "🔴";
+                var sign = t.Type == TransactionType.Income ? "+" : "-";
+                // Формат: 🔴 -120 TJS · 🍔 Еда
+                return $"{icon} *{sign}{t.Amount:N0}* TJS · {t.Category?.Icon} {t.Category?.Name}";
+            });
+            
+            var text = "📄 *История операций:*\n\n" + string.Join("\n", lines);
             
             // Только кнопка "Назад" к балансу
             await bot.EditMessageTextAsync(chatId, msgId, text,

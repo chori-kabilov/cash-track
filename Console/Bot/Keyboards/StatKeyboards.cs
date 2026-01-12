@@ -5,17 +5,17 @@ namespace Console.Bot.Keyboards;
 public static class StatKeyboards
 {
     // Главный экран: Сводка
-    public static InlineKeyboardMarkup StatsSummary(string periodLabel)
+    public static InlineKeyboardMarkup StatsSummary(string periodLabel, bool canGoBack, bool canGoForward)
     {
+        var navButtons = new List<InlineKeyboardButton>();
+        if (canGoBack) navButtons.Add(InlineKeyboardButton.WithCallbackData("<", "stat:prev"));
+        navButtons.Add(InlineKeyboardButton.WithCallbackData($"📅 {periodLabel}", "stat:period"));
+        if (canGoForward) navButtons.Add(InlineKeyboardButton.WithCallbackData(">", "stat:next"));
+
         return new InlineKeyboardMarkup(
             new[]
             {
-                new[] // Ряд 1: Навигация по периоду
-                { 
-                    InlineKeyboardButton.WithCallbackData("<", "stat:prev"),
-                    InlineKeyboardButton.WithCallbackData($"📅 {periodLabel}", "stat:period"),
-                    InlineKeyboardButton.WithCallbackData(">", "stat:next")
-                },
+                navButtons.ToArray(),
                 new[] // Ряд 2: Основные
                 { 
                     InlineKeyboardButton.WithCallbackData("📂 Категории", "stat:categories"),
@@ -28,7 +28,7 @@ public static class StatKeyboards
                 },
                 new[] // Ряд 4: Действия
                 { 
-                    InlineKeyboardButton.WithCallbackData("📄 Excel", "stat:export"),
+                    InlineKeyboardButton.WithCallbackData("📄 Отчет", "stat:export"),
                     InlineKeyboardButton.WithCallbackData("🔙 Меню", "stat:back")
                 }
             });
@@ -38,11 +38,11 @@ public static class StatKeyboards
     public static InlineKeyboardMarkup StatsCategories(bool showExpenses)
     {
         var expBtn = showExpenses 
-            ? InlineKeyboardButton.WithCallbackData("🔵 Расходы", "stat:cat:exp")
+            ? InlineKeyboardButton.WithCallbackData("🟢 Расходы", "stat:cat:exp")
             : InlineKeyboardButton.WithCallbackData("⚪️ Расходы", "stat:cat:exp");
         var incBtn = showExpenses 
             ? InlineKeyboardButton.WithCallbackData("⚪️ Доходы", "stat:cat:inc")
-            : InlineKeyboardButton.WithCallbackData("🔵 Доходы", "stat:cat:inc");
+            : InlineKeyboardButton.WithCallbackData("🟢 Доходы", "stat:cat:inc");
 
         return new InlineKeyboardMarkup(
             new[]
@@ -91,8 +91,12 @@ public static class StatKeyboards
                 new[]
                 { 
                     InlineKeyboardButton.WithCallbackData("Неделя", "stat:period:week"),
-                    InlineKeyboardButton.WithCallbackData("Месяц", "stat:period:month"),
-                    InlineKeyboardButton.WithCallbackData("Год", "stat:period:year")
+                    InlineKeyboardButton.WithCallbackData("Месяц", "stat:period:month")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("Год", "stat:period:year"),
+                    InlineKeyboardButton.WithCallbackData("За все время", "stat:period:all")
                 },
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 Отмена", "stat:summary") }
             });

@@ -35,6 +35,7 @@ public interface ITransactionService
     Task<decimal> GetCategoryExpenseAsync(long userId, int categoryId, DateTimeOffset fromDateUtc, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<int>> GetRecentCategoryIdsAsync(long userId, TransactionType type, int limit = 6, CancellationToken ct = default);
     Task<IReadOnlyList<(Category Category, decimal Amount)>> GetTopExpensesAsync(long userId, DateTimeOffset fromDate, int count, CancellationToken ct = default);
+    Task<IReadOnlyList<(Category Category, decimal Amount)>> GetTopIncomesAsync(long userId, DateTimeOffset fromDate, int count, CancellationToken ct = default);
     
     // Новые методы
     Task<Transaction?> GetByIdAsync(int id, CancellationToken ct = default);

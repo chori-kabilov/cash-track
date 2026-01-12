@@ -5,7 +5,8 @@ public enum StatsPeriod
 {
     Week = 1,
     Month = 2,
-    Year = 3
+    Year = 3,
+    AllTime = 4
 }
 
 // Текущий экран статистики

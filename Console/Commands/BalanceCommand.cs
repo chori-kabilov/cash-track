@@ -100,20 +100,20 @@ public class BalanceCommand(
         return avgExpense > 0 ? Math.Max(0, (int)(freeAmount / avgExpense)) : 999;
     }
 
-    private static string BuildBalanceText(BalanceData data, int daysRemaining, string currency)
+     private static string BuildBalanceText(BalanceData data, int daysRemaining, string currency)
     {
         var daysText = daysRemaining > 0 ? $"{daysRemaining} дней" : "< 1 дня";
-        var freeEmoji = data.FreeAmount < 0 ? "⚠️" : "💸";
-        var freeColor = data.FreeAmount < 0 ? "🔴" : "";
-
-        return $"💰 *Твой Капитал*\n\n" +
-               $"💵 *В наличии:* ||{data.TotalBalance:F0} {currency}||\n" +
-               $"{freeEmoji} *Свободно:* {freeColor}*{data.FreeAmount:F0} {currency}*\n\n" +
+        // Emojis for free amount: 🟢 if positive, 🔴 if negative
+        var freeEmoji = data.FreeAmount < 0 ? "🔴" : "🟢";
+        
+        return $"💰 *Ваш Капитал*\n\n" +
+               $"💵 *В наличии:* {data.TotalBalance:N0} {currency}\n" +
+               $"{freeEmoji} *Свободно:* *{data.FreeAmount:N0} {currency}*\n\n" +
                $"🔻 *Удержано:*\n" +
-               $"  📅 Регулярные: {(data.ShowPayments ? $"-{data.PaymentsAmount:F0}" : "_не учтены_")}\n" +
-               $"  🎯 Цели: {(data.ShowGoals ? $"-{data.GoalsSavings:F0}" : "_не учтены_")}\n" +
-               $"  📉 Долги: {(data.ShowDebts ? $"{data.NetDebt:F0}" : "_не учтены_")}\n\n" +
-               $"🔄 *Прогноз:* Денег хватит на *{daysText}*.";
+               $"  🔄 Регулярные: {(data.ShowPayments ? $"-{data.PaymentsAmount:N0}" : "_не учтены_")}\n" +
+               $"  🎯 Цели: {(data.ShowGoals ? $"-{data.GoalsSavings:N0}" : "_не учтены_")}\n" +
+               $"  📉 Долги: {(data.ShowDebts ? $"{data.NetDebt:N0}" : "_не учтены_")}\n\n" +
+               $"⏳ *Прогноз:* Денег хватит на *{daysText}*.";
     }
 
     #endregion

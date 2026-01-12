@@ -7,9 +7,10 @@ public static class BalanceKeyboards
     // Баланс — панель с переключателями
     public static InlineKeyboardMarkup BalanceDashboard(bool showDebts, bool showGoals, bool showPayments)
     {
-        var debtsText = showDebts ? "🟢 Долги" : "🔴 Долги: ВЫКЛ";
-        var goalsText = showGoals ? "🟢 Цели" : "⚪️ Цели: ВЫКЛ";
-        var paymentsText = showPayments ? "� Платежи" : "⚪️ Платежи: ВЫКЛ";
+        // Кнопки переключателей (одинаковая ширина для стабильности UI)
+        var debtsText = showDebts ? "🟢 Долги" : "🔴 Долги";
+        var goalsText = showGoals ? "🟢 Цели" : "🔴 Цели";
+        var paymentsText = showPayments ? "🟢 Платежи" : "🔴 Платежи";
 
         return new InlineKeyboardMarkup(
             new[]
@@ -22,8 +23,8 @@ public static class BalanceKeyboards
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("� Назад", "bal:back"),
-                    InlineKeyboardButton.WithCallbackData("📊 Детали", "bal:details")
+                    InlineKeyboardButton.WithCallbackData("🔙 Назад", "bal:back"),
+                    InlineKeyboardButton.WithCallbackData("📄 История", "bal:details")
                 }
             });
     }

@@ -12,11 +12,15 @@ namespace Console.Handlers;
 
 public class StatCallbackHandler(
     StatsCommand statsCmd,
-    ITransactionService transactionService) : ICallbackHandler
+    ITransactionService transactionService,
+    IAccountService accountService) : ICallbackHandler
 {
     public async Task<bool> HandleAsync(ITelegramBotClient bot, CallbackQuery cb, string data, UserFlowState? flow, Dictionary<long, UserFlowState> flowDict, CancellationToken ct)
     {
-        if (!data.StartsWith("stat:")) return false;
+        if (string.IsNullOrEmpty(data) || !data.StartsWith("stat:")) return false;
+        data = data.Trim();
+
+        System.Console.WriteLine($"[StatHandler] Received: {data}"); // DEBUG
 
         var userId = cb.From.Id;
         var chatId = cb.Message!.Chat.Id;
@@ -27,75 +31,153 @@ public class StatCallbackHandler(
         {
             sFlow = new UserFlowState();
             flowDict[userId] = sFlow;
+            System.Console.WriteLine($"[StatHandler] Created new flow for {userId}"); // DEBUG
         }
+        else
+        {
+             System.Console.WriteLine($"[StatHandler] Using existing flow. Screen: {sFlow.CurrentStatsScreen}"); // DEBUG
+        }
+
+        // Получаем дату регистрации для ограничений
+        var account = await accountService.GetUserAccountAsync(userId, ct);
+        var regDate = account?.CreatedAt ?? DateTimeOffset.MinValue;
+        var now = DateTimeOffset.UtcNow;
 
         switch (data)
         {
-            case "stat:summary":
-                sFlow.CurrentStatsScreen = StatsScreen.Summary;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
-                return true;
-            case "stat:categories":
-                sFlow.CurrentStatsScreen = StatsScreen.Categories;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
-                return true;
-            case "stat:history":
-                sFlow.CurrentStatsScreen = StatsScreen.History;
-                sFlow.StatsPage = 1;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
-                return true;
-            case "stat:emotions":
-                sFlow.CurrentStatsScreen = StatsScreen.Emotions;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
-                return true;
-            case "stat:regular":
-                sFlow.CurrentStatsScreen = StatsScreen.Regular;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
-                return true;
-            case "stat:period":
-                sFlow.CurrentStatsScreen = StatsScreen.PeriodSelect;
-                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
-                return true;
-            case "stat:prev":
-                sFlow.StatsDate = sFlow.StatsPeriod switch
+            // ... (cases)
+
+            case "stat:prev": // Назад в прошлое
+                // Если выбран период "За все время", навигация не нужна
+                if (sFlow.StatsPeriod == StatsPeriod.AllTime) return true;
+
+                var prevDate = sFlow.StatsPeriod switch
                 {
                     StatsPeriod.Week => sFlow.StatsDate.AddDays(-7),
                     StatsPeriod.Month => sFlow.StatsDate.AddMonths(-1),
                     StatsPeriod.Year => sFlow.StatsDate.AddYears(-1),
                     _ => sFlow.StatsDate.AddMonths(-1)
                 };
+                
+                // Строгая проверка "не раньше регистрации"
+                var minDate = sFlow.StatsPeriod switch
+                {
+                    StatsPeriod.Week => regDate, 
+                    StatsPeriod.Month => new DateTimeOffset(regDate.Year, regDate.Month, 1, 0, 0, 0, regDate.Offset),
+                    StatsPeriod.Year => new DateTimeOffset(regDate.Year, 1, 1, 0, 0, 0, regDate.Offset),
+                    _ => regDate
+                };
+
+                // Если новая дата попадает в период, который РАНЬШЕ минимального периода (не включительно), то стоп.
+                // То есть, если мы сейчас на Январе 2024 (дата регистрации), то prevDate будет Декабрь 2023 -> нельзя.
+                // Проверяем по дате (без времени), чтобы не блокировать, если время регистрации позже текущего времени
+                if (prevDate.Date < minDate.Date) 
+                {
+                     return true; 
+                }
+                
+                sFlow.StatsDate = prevDate;
                 await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
                 return true;
-            case "stat:next":
-                sFlow.StatsDate = sFlow.StatsPeriod switch
+
+            case "stat:next": // Вперед в будущее
+                // Если выбран период "За все время", навигация не нужна
+                if (sFlow.StatsPeriod == StatsPeriod.AllTime) return true;
+
+                var nextDate = sFlow.StatsPeriod switch
                 {
                     StatsPeriod.Week => sFlow.StatsDate.AddDays(7),
                     StatsPeriod.Month => sFlow.StatsDate.AddMonths(1),
                     StatsPeriod.Year => sFlow.StatsDate.AddYears(1),
                     _ => sFlow.StatsDate.AddMonths(1)
                 };
+
+                // Строгая проверка "не позже текущей даты"
+                // Если начало следующего периода БОЛЬШЕ чем сейчас -> нельзя.
+                // Например, сейчас 15 Января. Мы смотрим Январь. nextDate = Февраль (с 1 числа). 
+                // 1 Февраля > 15 Января -> нельзя.
+                // Для недели: сейчас Среда (15-е). Текущая неделя (13-19). nextDate = (20-26).
+                // 20-е > 15-го -> нельзя.
+                
+                // Получаем начало следующего периода
+                DateTimeOffset nextPeriodStart = nextDate; // По умолчанию flow.Date это и есть какая-то точка в периоде, но для точности:
+                if (sFlow.StatsPeriod == StatsPeriod.Month) nextPeriodStart = new DateTimeOffset(nextDate.Year, nextDate.Month, 1, 0,0,0, nextDate.Offset);
+                if (sFlow.StatsPeriod == StatsPeriod.Year) nextPeriodStart = new DateTimeOffset(nextDate.Year, 1, 1, 0,0,0, nextDate.Offset);
+                if (sFlow.StatsPeriod == StatsPeriod.Week) nextPeriodStart = nextDate; // Для кастомной недели просто проверяем саму дату
+                
+                // Проверяем по дате
+                if (nextPeriodStart.Date > now.Date)
+                {
+                     return true; 
+                }
+
+                sFlow.StatsDate = nextDate;
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                return true;
+
+            // ... (other cases)
+            case "stat:summary":
+                System.Console.WriteLine("[StatHandler] Case: stat:summary");
+                sFlow.CurrentStatsScreen = StatsScreen.Summary;
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                return true;
+            case "stat:categories":
+                System.Console.WriteLine("[StatHandler] Case: stat:categories");
+                sFlow.CurrentStatsScreen = StatsScreen.Categories;
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                return true;
+            case "stat:history":
+                System.Console.WriteLine("[StatHandler] Case: stat:history");
+                sFlow.CurrentStatsScreen = StatsScreen.History;
+                sFlow.StatsPage = 1;
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                return true;
+            case "stat:emotions":
+                System.Console.WriteLine("[StatHandler] Case: stat:emotions");
+                sFlow.CurrentStatsScreen = StatsScreen.Emotions;
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                return true;
+            case "stat:regular":
+                System.Console.WriteLine("[StatHandler] Case: stat:regular");
+                sFlow.CurrentStatsScreen = StatsScreen.Regular;
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                return true;
+            case "stat:period":
+                System.Console.WriteLine("[StatHandler] Case: stat:period");
+                sFlow.CurrentStatsScreen = StatsScreen.PeriodSelect;
                 await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
                 return true;
             case "stat:period:week":
+                System.Console.WriteLine("[StatHandler] Case: stat:period:week");
                 sFlow.StatsPeriod = StatsPeriod.Week;
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
                 await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
                 return true;
             case "stat:period:month":
+                System.Console.WriteLine("[StatHandler] Case: stat:period:month");
                 sFlow.StatsPeriod = StatsPeriod.Month;
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
                 await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
                 return true;
             case "stat:period:year":
+                System.Console.WriteLine("[StatHandler] Case: stat:period:year");
                 sFlow.StatsPeriod = StatsPeriod.Year;
                 sFlow.CurrentStatsScreen = StatsScreen.Summary;
                 await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
                 return true;
+            case "stat:period:all":
+                System.Console.WriteLine("[StatHandler] Case: stat:period:all");
+                sFlow.StatsPeriod = StatsPeriod.AllTime;
+                sFlow.CurrentStatsScreen = StatsScreen.Summary;
+                await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
+                return true;
             case "stat:cat:exp":
+                System.Console.WriteLine("[StatHandler] Case: stat:cat:exp");
                 sFlow.StatsShowExpenses = true;
                 await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
                 return true;
             case "stat:cat:inc":
+                System.Console.WriteLine("[StatHandler] Case: stat:cat:inc");
                 sFlow.StatsShowExpenses = false;
                 await statsCmd.RenderCurrentScreenAsync(bot, chatId, userId, sFlow, ct, msgId);
                 return true;
@@ -109,7 +191,7 @@ public class StatCallbackHandler(
                 return true;
             case "stat:back":
                 flowDict.Remove(userId);
-                await bot.EditMessageTextAsync(chatId, msgId, "🏠 *Главное меню*\n\nВыберите действие:", 
+                await bot.EditMessageTextAsync(chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
                     replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
                 return true;
             case "stat:export":

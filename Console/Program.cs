@@ -52,7 +52,7 @@ var limitService = new LimitService(db);
 var startCmd = new StartCommand(userService, categoryService);
 var helpCmd = new HelpCommand(config.GetValue<long?>("FeedbackChatId"));
 var balanceCmd = new BalanceCommand(accountService, goalService, debtService, regularService, transactionService);
-var statsCmd = new StatsCommand(transactionService, limitService, regularService);
+var statsCmd = new StatsCommand(transactionService, limitService, regularService, accountService);
 var goalCmd = new GoalCommand(goalService, accountService, transactionService, categoryService);
 var debtCmd = new DebtCommand(debtService, accountService, transactionService, categoryService);
 var regularCmd = new RegularPaymentCommand(regularService, accountService, transactionService, categoryService);
@@ -81,7 +81,7 @@ var callbackRouter = new CallbackRouter(new ICallbackHandler[]
 {
     new MenuCallbackHandler(balanceCmd, statsCmd, goalCmd, debtCmd, regularCmd, limitCmd, helpCmd),
     new BalanceCallbackHandler(balanceCmd, transactionService),
-    new StatCallbackHandler(statsCmd, transactionService),
+    new StatCallbackHandler(statsCmd, transactionService, accountService),
     new GoalCallbackHandler(goalCmd, goalService),
     new TransactionCallbackHandler(transactionFlowHandler, transactionService, categoryService, accountService),
     new DebtCallbackHandler(debtCmd, debtService),

@@ -24,7 +24,7 @@ public class GlobalCallbackHandler(
         if (data == "action:cancel:edit")
         {
             flowDict.Remove(userId);
-            await bot.EditMessageTextAsync(chatId, msgId, "🏠 *Главное меню*\n\nВыберите действие:", 
+            await bot.EditMessageTextAsync(chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
                 ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
             return true;
         }
@@ -35,12 +35,12 @@ public class GlobalCallbackHandler(
             flowDict.Remove(userId);
             try
             {
-                await bot.EditMessageTextAsync(chatId, msgId, "🏠 *Главное меню*\n\nВыберите действие:", 
+                await bot.EditMessageTextAsync(chatId, msgId, "🏠 Главное меню\n\nВыберите действие:", 
                     ParseMode.Markdown, replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
             }
             catch
             {
-                await bot.SendTextMessageAsync(chatId, "🏠 *Главное меню*\n\nВыберите действие:", 
+                await bot.SendTextMessageAsync(chatId, "🏠 Главное меню\n\nВыберите действие:", 
                     replyMarkup: BotInlineKeyboards.MainMenu(), cancellationToken: ct);
             }
             return true;

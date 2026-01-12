@@ -31,8 +31,8 @@ public static class BotInlineKeyboards
         => BalanceKeyboards.BalanceDetails();
 
     // Stat
-    public static InlineKeyboardMarkup StatsSummary(string periodLabel) 
-        => StatKeyboards.StatsSummary(periodLabel);
+    public static InlineKeyboardMarkup StatsSummary(string periodLabel, bool canGoBack, bool canGoForward) 
+        => StatKeyboards.StatsSummary(periodLabel, canGoBack, canGoForward);
     public static InlineKeyboardMarkup StatsCategories(bool showExpenses) 
         => StatKeyboards.StatsCategories(showExpenses);
     public static InlineKeyboardMarkup StatsHistory(int page, int totalPages) 
