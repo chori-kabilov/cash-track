@@ -159,7 +159,7 @@ public class HelpCommand
         sb.AppendLine("Привет! Я разработчик CashTrack 👋\n");
         sb.AppendLine("Если есть вопросы, предложения");
         sb.AppendLine("или просто хотите поговорить:\n");
-        sb.AppendLine($"👤 Telegram: `{DeveloperUsername}`\n");
+        sb.AppendLine($"👤 Telegram: {EscapeMarkdown(DeveloperUsername)}\n");
         sb.AppendLine("💬 Напишите — отвечу!");
 
         await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),

@@ -52,10 +52,10 @@ public class RegularPaymentCommand(
 
         var sb = new StringBuilder();
         sb.AppendLine("🔄 *Регулярные платежи*\n");
-        sb.AppendLine("📊 *В этом месяце:*");
-        sb.AppendLine($"💰 Всего: *{totalMonth:N0}* TJS ({totalCount} платежей)");
-        sb.AppendLine($"✅ Оплачено: *{paidMonth:N0}* TJS ({paidCount})");
-        sb.AppendLine($"⏳ Ожидает: *{pendingMonth:N0}* TJS ({pendingCount})");
+        sb.AppendLine("📊 *В этом месяце:\n*");
+        sb.AppendLine($"💰 Всего: *{totalMonth:N0}* TJS");
+        sb.AppendLine($"✅ Оплачено: *{paidMonth:N0}* TJS");
+        sb.AppendLine($"⏳ Осталось оплатить: *{pendingMonth:N0}* TJS");
 
         if (overdue.Any() || due.Any())
         {
@@ -121,11 +121,12 @@ public class RegularPaymentCommand(
         var catName = payment.Category?.Name ?? "Без категории";
         var catEmoji = payment.Category?.Icon ?? "📂";
         var freq = GetFrequencyText(payment.Frequency, payment.DayOfMonth);
+        var typeStr = payment.Type == RegularPaymentType.Fixed ? "🅰️ Фиксированный" : "🅱️ Плавающий";
 
         sb.AppendLine($"📋 *{payment.Name}*\n");
         sb.AppendLine($"💰 Сумма: *{payment.Amount:N0}* TJS");
         sb.AppendLine($"🔄 {freq}");
-        sb.AppendLine($"{catEmoji} Категория: {catName}");
+        sb.AppendLine($"⚙️ Тип: {typeStr}");
 
         if (payment.IsPaused)
         {
@@ -136,7 +137,16 @@ public class RegularPaymentCommand(
             var days = (payment.NextDueDate.Value - DateTimeOffset.UtcNow).Days;
             var status = days < 0 ? $"просрочен на {-days} дн." : (days == 0 ? "сегодня!" : $"через {days} дн.");
             var statusIcon = days < 0 ? "🔴" : (days <= 3 ? "🟡" : "🟢");
-            sb.AppendLine($"\n{statusIcon} *Следующий:* {payment.NextDueDate:dd.MM.yyyy} ({status})");
+            
+            // Выравнивание: иконка (2 симв) + пробел + "Следующий:" (~10) -> отступ для второй строки
+            // "\n   (через X дн.)"
+            sb.AppendLine($"\n{statusIcon} *Следующий:* {payment.NextDueDate:dd.MM.yyyy}");
+            sb.AppendLine($"      _({status})_");
+        }
+
+        if (!payment.IsPaused)
+        {
+             sb.AppendLine("\n👇 _Если вы ещё раз совершили этот платёж, то нажмите на кнопку оплаты_");
         }
 
         if (!hasEnough && !payment.IsPaused)
@@ -147,7 +157,7 @@ public class RegularPaymentCommand(
         }
         else if (!payment.IsPaused)
         {
-            sb.AppendLine($"\n💳 Баланс: {account?.Balance ?? 0:N0} TJS ✅");
+            sb.AppendLine($"\n💳 Баланс хватает: {account?.Balance ?? 0:N0} TJS ✅");
         }
 
         await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
@@ -191,13 +201,14 @@ public class RegularPaymentCommand(
         var freq = GetFrequencyText(payment.Frequency, payment.DayOfMonth);
         var catName = payment.Category?.Name ?? "Без категории";
         var catEmoji = payment.Category?.Icon ?? "📂";
+        var typeStr = payment.Type == RegularPaymentType.Fixed ? "🅰️ Фиксированный" : "🅱️ Плавающий";
 
         var sb = new StringBuilder();
         sb.AppendLine("✅ *Платёж создан!*\n");
         sb.AppendLine($"📋 *{payment.Name}*");
         sb.AppendLine($"💰 {payment.Amount:N0} TJS");
         sb.AppendLine($"🔄 {freq}");
-        sb.AppendLine($"{catEmoji} Категория: {catName}");
+        sb.AppendLine($"⚙️ Тип: {typeStr}");
         sb.AppendLine($"\n📅 Следующий платёж: {payment.NextDueDate:dd.MM.yyyy}");
 
         await bot.SendTextMessageAsync(chatId, sb.ToString(),

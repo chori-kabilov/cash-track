@@ -18,7 +18,7 @@ public interface IRegularPaymentService
     Task<(decimal totalMonth, int totalCount, decimal paidMonth, int paidCount, decimal pendingMonth, int pendingCount)> GetSummaryAsync(long userId, CancellationToken ct = default);
     
     // CREATE
-    Task<RegularPayment> CreateAsync(long userId, string name, decimal amount, PaymentFrequency frequency,
+    Task<RegularPayment> CreateAsync(long userId, string name, decimal amount, PaymentFrequency frequency, RegularPaymentType type,
         int? categoryId = null, int? dayOfMonth = null, int reminderDaysBefore = 3, DateTimeOffset? startDate = null,
         CancellationToken ct = default);
     

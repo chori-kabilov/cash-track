@@ -29,6 +29,7 @@ public sealed class UserFlowState
     public string? PendingRegularName { get; set; }
     public decimal PendingRegularAmount { get; set; }
     public PaymentFrequency PendingRegularFrequency { get; set; }
+    public RegularPaymentType PendingRegularType { get; set; }
     public int? PendingRegularId { get; set; }
     public int PendingRegularDayOfMonth { get; set; }
 

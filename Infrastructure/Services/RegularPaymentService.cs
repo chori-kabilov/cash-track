@@ -104,7 +104,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
     }
 
     // Создать
-    public async Task<RegularPayment> CreateAsync(long userId, string name, decimal amount, PaymentFrequency frequency,
+    public async Task<RegularPayment> CreateAsync(long userId, string name, decimal amount, PaymentFrequency frequency, RegularPaymentType type,
         int? categoryId = null, int? dayOfMonth = null, int reminderDaysBefore = 3, DateTimeOffset? startDate = null, CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
@@ -116,6 +116,7 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
             Name = name.Trim(),
             Amount = amount,
             Frequency = frequency,
+            Type = type,
             CategoryId = categoryId,
             DayOfMonth = dayOfMonth,
             ReminderDaysBefore = reminderDaysBefore,
@@ -165,10 +166,38 @@ public sealed class RegularPaymentService(DataContext context) : IRegularPayment
             PaidAt = now,
             TransactionId = transactionId
         };
-        context.RegularPaymentHistories.Add(history);
+        // Logic: 
+        // Если Floating: NextDueDate resets to NOW + Frequency (Smart Pay-Ahead)
+        // Если Fixed: NextDueDate resets to PreviousNextDueDate + Frequency (Strict)
+
+        if (payment.Type == RegularPaymentType.Floating)
+        {
+            // Плавающий (как интернет) - сдвигаем базу на сегодня
+            if (payment.Frequency == PaymentFrequency.Monthly)
+            {
+                payment.DayOfMonth = now.Day;
+            }
+            payment.NextDueDate = CalculateNextDueDate(now, payment.Frequency, payment.DayOfMonth);
+        }
+        else
+        {
+            // Фиксированный (как аренда) - сохраняем график
+            // Если NextDueDate уже прошел, берем его за основу. Если null (первый раз?), то now.
+            var baseDate = payment.NextDueDate ?? now;
+            // Если просрочили на несколько месяцев, нужно найти следующую дату в будущем или просто +1 период?
+            // "Следующий платёж: Всё равно 1-го числа следующего месяца". 
+            // Это значит baseDate + 1 период.
+            // Но если мы платим за январь в феврале, следующий должен быть за март? Или за февраль?
+            // "Вы забыли и оплатили 5-го... Следующий всё равно 1-го следующего месяца".
+            
+            // Вариант А: Мы платим долг. Следующий - это тот, который идет ПОСЛЕ оплаченного.
+            // Если NextDueDate был 01.01, а сейчас 05.01. Мы платим. Следующий должен стать 01.02.
+            payment.NextDueDate = CalculateNextDueDate(baseDate, payment.Frequency, payment.DayOfMonth);
+        }
+        
+        // Reset DayOfMonth back to original if needed? No, Fixed doesn't change it. Floating changes it.
 
         payment.LastPaidDate = now;
-        payment.NextDueDate = CalculateNextDueDate(now, payment.Frequency, payment.DayOfMonth);
         await context.SaveChangesAsync(ct);
         return (payment, history);
     }

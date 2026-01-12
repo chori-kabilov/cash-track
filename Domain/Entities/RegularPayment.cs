@@ -25,6 +25,7 @@ public class RegularPayment
 
     [Required]
     public PaymentFrequency Frequency { get; set; } // Частота (ежедневно/еженедельно/ежемесячно)
+    public RegularPaymentType Type { get; set; } = RegularPaymentType.Fixed;
     public int? DayOfMonth { get; set; } // День месяца (для ежемесячных)
     public int? DayOfWeek { get; set; } // День недели (для еженедельных)
     public int ReminderDaysBefore { get; set; } = 3; // За сколько дней напомнить

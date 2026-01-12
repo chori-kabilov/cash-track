@@ -92,7 +92,7 @@ public class RegularPaymentsController(IRegularPaymentService regularPaymentServ
         [FromQuery] int? dayOfMonth = null,
         [FromQuery] int reminderDaysBefore = 3)
     {
-        var r = await regularPaymentService.CreateAsync(userId, name, amount, frequency, categoryId, dayOfMonth, reminderDaysBefore);
+        var r = await regularPaymentService.CreateAsync(userId, name, amount, frequency, RegularPaymentType.Fixed, categoryId, dayOfMonth, reminderDaysBefore);
         return Ok(RegularPaymentMapper.ToDto(r));
     }
 

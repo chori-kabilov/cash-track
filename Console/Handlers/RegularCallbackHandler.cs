@@ -141,7 +141,7 @@ public class RegularCallbackHandler(
             if (int.TryParse(data.Split(':')[2], out var paymentId))
             {
                 await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
-                    "✏️ *Редактирование*\n\nЧто изменить?",
+                    "✏️ *Редактирование платёжа*\n\nЧто изменить?",
                     RegularKeyboards.Edit(paymentId), ct, cb.Id);
             }
             return true;
@@ -190,40 +190,7 @@ public class RegularCallbackHandler(
             return true;
         }
 
-        if (data.StartsWith("regular:edit:cat:"))
-        {
-            if (int.TryParse(data.Split(':')[3], out var paymentId))
-            {
-                rFlow.Step = UserFlowStep.WaitingRegularEditCat;
-                rFlow.PendingRegularId = paymentId;
-                var cats = await categoryService.GetByTypeAsync(userId, TransactionType.Expense, ct);
-                var buttons = cats.Select(c => 
-                    new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData($"{c.Icon} {c.Name}", $"regular:setcat:{paymentId}:{c.Id}") }
-                ).ToList();
-                buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("⏭ Без категории", $"regular:setcat:{paymentId}:0") });
-                buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("❌ Отмена", $"regular:detail:{paymentId}") });
-                await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
-                    "📂 *Выберите категорию:*",
-                    new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons), ct, cb.Id);
-            }
-            return true;
-        }
 
-        if (data.StartsWith("regular:setcat:"))
-        {
-            var parts = data.Split(':');
-            if (parts.Length >= 4 && int.TryParse(parts[2], out var paymentId) && int.TryParse(parts[3], out var catId))
-            {
-                var payment = await regularService.GetByIdAsync(userId, paymentId, ct);
-                if (payment != null)
-                {
-                    await regularService.UpdateAsync(userId, paymentId, payment.Name, payment.Amount, catId == 0 ? null : catId, ct);
-                    rFlow.Step = UserFlowStep.None;
-                    await regularCmd.ShowDetailAsync(bot, chatId, userId, paymentId, msgId, ct, cb.Id);
-                }
-            }
-            return true;
-        }
 
         // === ЧАСТОТА (ПРИ СОЗДАНИИ) ===
         if (data.StartsWith("regular:freq:"))
@@ -237,14 +204,33 @@ public class RegularCallbackHandler(
                 _ => PaymentFrequency.Monthly
             };
             rFlow.PendingRegularFrequency = freq;
-            rFlow.Step = UserFlowStep.WaitingRegularDate;
-
-            var datePrompt = freq == PaymentFrequency.Weekly 
-                ? "Введите день недели (1=Пн, 7=Вс):" 
-                : "Введите число (1-31):";
+            rFlow.Step = UserFlowStep.WaitingRegularType; // Следующий шаг: ТИП
 
             await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
-                $"🔄 Периодичность: *{GetFreqName(freq)}*\n\n{datePrompt}",
+                $"🔄 Периодичность: *{GetFreqName(freq)}*\n\n" +
+                "Выберите тип платежа:\n\n" +
+                "📌 *Фиксированный*\n_дата всегда одинаковая._\n" +
+                "📌 *Плавающий*\n_Дата меняется каждый раз._",
+                RegularKeyboards.PaymentType(), ct, cb.Id);
+            return true;
+        }
+
+        // === ТИП (ПРИ СОЗДАНИИ) ===
+        if (data.StartsWith("regular:type:"))
+        {
+            var typeStr = data.Split(':')[2];
+            var type = typeStr == "floating" ? RegularPaymentType.Floating : RegularPaymentType.Fixed;
+            rFlow.PendingRegularType = type;
+            rFlow.Step = UserFlowStep.WaitingRegularDate;
+
+            // Определяем промпт для даты (зависит от частоты, которая уже в flow)
+            var datePrompt = rFlow.PendingRegularFrequency == PaymentFrequency.Weekly 
+                ? "Введите день недели (1=Пн, 7=Вс):" 
+                : "Введите число оплаты (1-31):";
+
+            var typeName = type == RegularPaymentType.Floating ? "Плавающий" : "Фиксированный";
+            await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
+                $"⚙️ Тип: *{typeName}*\n\n{datePrompt}",
                 RegularKeyboards.DayOfMonth(), ct, cb.Id);
             return true;
         }
@@ -252,41 +238,13 @@ public class RegularCallbackHandler(
         if (data == "regular:day:last")
         {
             rFlow.PendingRegularDayOfMonth = 0; // 0 = последний день
-            return await ShowCategorySelectionAsync(bot, chatId, userId, msgId, rFlow, ct, cb.Id);
-        }
-
-        if (data.StartsWith("regular:cat:"))
-        {
-            if (data == "regular:cat:skip")
-            {
-                rFlow.PendingCategoryId = null;
-                return await FinalizeCreationAsync(bot, chatId, userId, rFlow, flowDict, ct);
-            }
-            if (int.TryParse(data.Split(':')[2], out var catId))
-            {
-                rFlow.PendingCategoryId = catId;
-                return await FinalizeCreationAsync(bot, chatId, userId, rFlow, flowDict, ct);
-            }
-            return true;
+            return await FinalizeCreationAsync(bot, chatId, userId, rFlow, flowDict, ct);
         }
 
         return false;
     }
 
-    private async Task<bool> ShowCategorySelectionAsync(ITelegramBotClient bot, long chatId, long userId, int msgId, UserFlowState flow, CancellationToken ct, string? callbackQueryId = null)
-    {
-        flow.Step = UserFlowStep.None;
-        var cats = await categoryService.GetByTypeAsync(userId, TransactionType.Expense, ct);
-        var buttons = cats.Select(c => 
-            new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData($"{c.Icon} {c.Name}", $"regular:cat:{c.Id}") }
-        ).ToList();
-        buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("⏭ Без категории", "regular:cat:skip") });
-        buttons.Add(new[] { Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("❌ Отмена", "regular:main") });
-        await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
-            "📂 Выберите категорию:",
-            new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(buttons), ct, callbackQueryId);
-        return true;
-    }
+
 
     private async Task<bool> FinalizeCreationAsync(ITelegramBotClient bot, long chatId, long userId, UserFlowState flow, Dictionary<long, UserFlowState> flowDict, CancellationToken ct)
     {
@@ -295,7 +253,7 @@ public class RegularCallbackHandler(
             : flow.PendingRegularDayOfMonth;
 
         var payment = await regularService.CreateAsync(userId, flow.PendingRegularName!,
-            flow.PendingRegularAmount, flow.PendingRegularFrequency, flow.PendingCategoryId, dayOfMonth, 3, null, ct);
+            flow.PendingRegularAmount, flow.PendingRegularFrequency, flow.PendingRegularType, null, dayOfMonth, 3, null, ct);
 
         flowDict.Remove(userId);
         await regularCmd.ShowAfterCreateAsync(bot, chatId, payment, ct);

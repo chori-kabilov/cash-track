@@ -31,7 +31,7 @@ public class RegularFlowHandler(
         {
             UserFlowStep.WaitingRegularName => await HandleNameAsync(bot, chatId, text, flow, ct),
             UserFlowStep.WaitingRegularAmount => await HandleAmountAsync(bot, chatId, text, flow, ct),
-            UserFlowStep.WaitingRegularDate => await HandleDateAsync(bot, chatId, text, flow, ct),
+            UserFlowStep.WaitingRegularDate => await HandleDateAsync(bot, chatId, userId, text, flow, ct),
             UserFlowStep.WaitingRegularSelect => await HandleSelectAsync(bot, chatId, userId, text, flow, flowDict, ct),
             UserFlowStep.WaitingRegularEditName => await HandleEditNameAsync(bot, chatId, userId, text, flow, flowDict, ct),
             UserFlowStep.WaitingRegularEditAmount => await HandleEditAmountAsync(bot, chatId, userId, text, flow, flowDict, ct),
@@ -71,8 +71,19 @@ public class RegularFlowHandler(
         return true;
     }
 
+    // Обработчик Типа (но он через Callback, поэтому здесь логика только если текст введен, что маловероятно для кнопок)
+    // Но нам нужно добавить в HandledSteps? Нет, CallbackHandler обрабатывает кнопки.
+    // Нам нужно добавить состояние в UserFlowStep?
+    // Мы добавили PendingRegularType в стейт, но enum шага?
+    // UserFlowStep.WaitingRegularType?
+    // Давайте проверим UserFlowStep.
+    
+    // Пока просто добавим логику смены шага в Handlers.
+    // FlowHandler обрабатывает TEXT input.
+    // Type выбирается кнопками -> RegularCallbackHandler.
+    
     // День
-    private async Task<bool> HandleDateAsync(ITelegramBotClient bot, long chatId, string text, UserFlowState flow, CancellationToken ct)
+    private async Task<bool> HandleDateAsync(ITelegramBotClient bot, long chatId, long userId, string text, UserFlowState flow, CancellationToken ct)
     {
         if (!int.TryParse(text.Trim(), out var day) || day < 1 || day > 31)
         {
@@ -84,11 +95,33 @@ public class RegularFlowHandler(
         flow.PendingRegularDayOfMonth = day;
         flow.Step = UserFlowStep.None;
 
-        // Показать выбор категории (через callback)
-        await bot.SendTextMessageAsync(chatId,
-            $"📅 День: *{day} числа*\n\nВыберите категорию:",
-            ParseMode.Markdown, replyMarkup: RegularKeyboards.SkipCategory(), cancellationToken: ct);
-        return true;
+        // Финализация (Категория по умолчанию)
+        // Имитируем finalize в CallbackHandler, но здесь у нас нет доступа к нему напрямую
+        // Придётся вызвать логику создания здесь или перенаправить
+        // Проще вызвать создание напрямую
+        
+        var dayOfMonth = flow.PendingRegularDayOfMonth == 0 
+            ? DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month) 
+            : flow.PendingRegularDayOfMonth;
+
+        // Категорию не ставим (будет системная при оплате) или null
+        var payment = await regularService.CreateAsync(userId, flow.PendingRegularName!,
+            flow.PendingRegularAmount, flow.PendingRegularFrequency, flow.PendingRegularType, null, dayOfMonth, 3, null, ct);
+        
+        // flowDict нужно очистить в calling code, но мы тут reference
+        // Так как мы IFlowStepHandler, нам передали flowDict
+        // flowDict.Remove(userId); <-- This logic is usually outside or passed in
+        // Исправим сигнатуру HandleAsync чтобы принимать словарь если надо, но он уже есть
+        
+        // В текущем коде: HandleSelectAsync принимает flowDict. HandleDateAsync тоже должен.
+        // Но в интерфейсе HandleAsync принимает flowDict.
+        // Реализуем private метод Finalize или скопируем логику
+        
+        // ВАЖНО: Мы не можем тут вызвать regularCmd.ShowAfterCreateAsync если не прокинем
+        // Но regularCmd у нас есть в конструкторе.
+        
+        await regularCmd.ShowAfterCreateAsync(bot, chatId, payment, ct);
+        return true; 
     }
 
     // Выбор по номеру

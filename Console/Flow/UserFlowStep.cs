@@ -29,6 +29,7 @@ public enum UserFlowStep
     WaitingRegularName = 23,
     WaitingRegularAmount = 24,
     WaitingRegularFrequency = 25,
+    WaitingRegularType = 37,
     WaitingRegularDate = 26,
     WaitingRegularSelect = 27,
     WaitingRegularEditName = 28,

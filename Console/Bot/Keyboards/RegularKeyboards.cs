@@ -38,6 +38,14 @@ public static class RegularKeyboards
         new[] { InlineKeyboardButton.WithCallbackData("❌ Отмена", "regular:main") }
     });
 
+    // Тип платежа
+    public static InlineKeyboardMarkup PaymentType() => new(new[]
+    {
+        new[] { InlineKeyboardButton.WithCallbackData("🅰️ Фиксированный", "regular:type:fixed") },
+        new[] { InlineKeyboardButton.WithCallbackData("🅱️ Плавающий", "regular:type:floating") },
+        new[] { InlineKeyboardButton.WithCallbackData("❌ Отмена", "regular:main") }
+    });
+
     // Выбор дня
     public static InlineKeyboardMarkup DayOfMonth() => new(new[]
     {
@@ -46,11 +54,7 @@ public static class RegularKeyboards
     });
 
     // Без категории
-    public static InlineKeyboardMarkup SkipCategory() => new(new[]
-    {
-        new[] { InlineKeyboardButton.WithCallbackData("⏭ Без категории", "regular:cat:skip") },
-        new[] { InlineKeyboardButton.WithCallbackData("❌ Отмена", "regular:main") }
-    });
+
 
     // Список с пагинацией
     public static InlineKeyboardMarkup List(int page, int totalPages)
@@ -145,8 +149,7 @@ public static class RegularKeyboards
         },
         new[] 
         { 
-            InlineKeyboardButton.WithCallbackData("📅 Дату", $"regular:edit:day:{paymentId}"),
-            InlineKeyboardButton.WithCallbackData("📂 Категорию", $"regular:edit:cat:{paymentId}")
+            InlineKeyboardButton.WithCallbackData("📅 Дату", $"regular:edit:day:{paymentId}")
         },
         new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", $"regular:detail:{paymentId}") }
     });
