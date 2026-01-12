@@ -67,7 +67,7 @@ public class DebtCommand(
         }
 
         await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId, sb.ToString(),
-            DebtKeyboards.Dashboard(), ct, callbackQueryId);
+            DebtKeyboards.Dashboard(theyOwe > 0 || theyOweCount > 0, iOwe > 0 || iOweCount > 0), ct, callbackQueryId);
     }
 
     // Список долгов по типу
@@ -192,7 +192,7 @@ public class DebtCommand(
         var typeLabel = isTheyOwe ? "вам должен" : "вы должны";
 
         var sb = new StringBuilder();
-        sb.AppendLine("✅ *Долг создан!*\n");
+        sb.AppendLine("✅ *Новый долг успешно создан!*\n");
         sb.AppendLine($"{typeIcon} *{debt.PersonName}* {typeLabel}");
         sb.AppendLine($"💰 *{debt.Amount:N0}* TJS");
 

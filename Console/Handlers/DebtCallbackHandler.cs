@@ -41,7 +41,7 @@ public class DebtCallbackHandler(
 
             case "debt:create":
                 await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
-                    "💸 *Новый долг*\n\nВыберите тип:",
+                    "💸 *Создание нового долга*\n\nВыберите тип:",
                     DebtKeyboards.CreateType(), ct, cb.Id);
                 return true;
 
@@ -153,7 +153,7 @@ public class DebtCallbackHandler(
             if (int.TryParse(data.Split(':')[2], out var debtId))
             {
                 await CommandHelpers.SafeEditMessageAsync(bot, chatId, msgId,
-                    "✏️ *Редактирование*\n\nЧто изменить?",
+                    "✏️ *Редактирование долга*\n\nЧто изменить?",
                     DebtKeyboards.Edit(debtId), ct, cb.Id);
             }
             return true;

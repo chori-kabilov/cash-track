@@ -32,11 +32,8 @@ public static class RegularKeyboards
     // Выбор периодичности
     public static InlineKeyboardMarkup Frequency() => new(new[]
     {
-        new[] 
-        { 
-            InlineKeyboardButton.WithCallbackData("📅 Ежемесячно", "regular:freq:monthly"),
-            InlineKeyboardButton.WithCallbackData("📆 Еженедельно", "regular:freq:weekly")
-        },
+        new[] { InlineKeyboardButton.WithCallbackData("📅 Еженедельно", "regular:freq:weekly") },
+        new[] { InlineKeyboardButton.WithCallbackData("📅 Ежемесячно", "regular:freq:monthly") },
         new[] { InlineKeyboardButton.WithCallbackData("📅 Ежегодно", "regular:freq:yearly") },
         new[] { InlineKeyboardButton.WithCallbackData("❌ Отмена", "regular:main") }
     });
@@ -91,20 +88,21 @@ public static class RegularKeyboards
         var payLabel = hasEnoughBalance ? "✅ Оплачено" : "⚠️ Оплачено (недостаточно)";
         buttons.Add(new[] { InlineKeyboardButton.WithCallbackData(payLabel, $"regular:pay:{paymentId}") });
 
-        // История
-        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("📜 История", $"regular:history:{paymentId}") });
-
-        // Редактирование и управление
+        // История и редактирование
         buttons.Add(new[] 
         { 
-            InlineKeyboardButton.WithCallbackData("✏️ Редактировать", $"regular:edit:{paymentId}"),
-            InlineKeyboardButton.WithCallbackData("🗑 Удалить", $"regular:delete:{paymentId}")
+            InlineKeyboardButton.WithCallbackData("📜 История", $"regular:history:{paymentId}"), 
+            InlineKeyboardButton.WithCallbackData("✏️ Изменить", $"regular:edit:{paymentId}") 
         });
 
         // Пауза/Возобновление
-        var pauseLabel = isPaused ? "▶️ Возобновить" : "⏸ Приостановить";
+        var pauseLabel = isPaused ? "▶️ Возобновить" : "⏸ Остановить";
         var pauseAction = isPaused ? "resume" : "pause";
-        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData(pauseLabel, $"regular:{pauseAction}:{paymentId}") });
+        buttons.Add(new[] 
+        { 
+            InlineKeyboardButton.WithCallbackData(pauseLabel, $"regular:{pauseAction}:{paymentId}"),
+            InlineKeyboardButton.WithCallbackData("🗑 Удалить", $"regular:delete:{paymentId}") 
+        });
 
         buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "regular:main") });
         return new InlineKeyboardMarkup(buttons);

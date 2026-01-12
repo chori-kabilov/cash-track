@@ -7,19 +7,30 @@ namespace Console.Bot.Keyboards;
 public static class DebtKeyboards
 {
     // Главный экран долгов (дашборд)
-    public static InlineKeyboardMarkup Dashboard() => new(new[]
+    public static InlineKeyboardMarkup Dashboard(bool hasLent, bool hasBorrowed)
     {
-        new[] 
-        { 
-            InlineKeyboardButton.WithCallbackData("📥 Мне должны", "debt:list:theyowe"),
-            InlineKeyboardButton.WithCallbackData("📤 Я должен", "debt:list:iowe")
-        },
-        new[] 
-        { 
-            InlineKeyboardButton.WithCallbackData("➕ Новый долг", "debt:create"),
-            InlineKeyboardButton.WithCallbackData("🔙 Назад", "menu:main")
-        }
-    });
+        var row1 = new List<InlineKeyboardButton>();
+        
+        if (hasLent)
+            row1.Add(InlineKeyboardButton.WithCallbackData("📥 Мне должны", "debt:list:theyowe"));
+        else
+            row1.Add(InlineKeyboardButton.WithCallbackData("➕ Мне должны", "debt:create:theyowe"));
+
+        if (hasBorrowed)
+            row1.Add(InlineKeyboardButton.WithCallbackData("📤 Я должен", "debt:list:iowe"));
+        else
+            row1.Add(InlineKeyboardButton.WithCallbackData("➕ Я должен", "debt:create:iowe"));
+
+        return new InlineKeyboardMarkup(new[]
+        {
+            row1.ToArray(),
+            new[] 
+            { 
+                InlineKeyboardButton.WithCallbackData("➕ Новый долг", "debt:create"),
+                InlineKeyboardButton.WithCallbackData("🔙 Назад", "menu:main")
+            }
+        });
+    }
 
     // Пустой экран
     public static InlineKeyboardMarkup Empty() => new(new[]
@@ -35,8 +46,11 @@ public static class DebtKeyboards
     // Выбор типа долга
     public static InlineKeyboardMarkup CreateType() => new(new[]
     {
-        new[] { InlineKeyboardButton.WithCallbackData("📥 Мне должны", "debt:create:theyowe") },
-        new[] { InlineKeyboardButton.WithCallbackData("📤 Я должен", "debt:create:iowe") },
+        new[] 
+        { 
+            InlineKeyboardButton.WithCallbackData("📥 Мне должны", "debt:create:theyowe"),
+            InlineKeyboardButton.WithCallbackData("📤 Я должен", "debt:create:iowe") 
+        },
         new[] { InlineKeyboardButton.WithCallbackData("🔙 Отмена", "debt:main") }
     });
 
@@ -98,7 +112,7 @@ public static class DebtKeyboards
             new[] { InlineKeyboardButton.WithCallbackData("📜 История платежей", $"debt:history:{debtId}") },
             new[] 
             { 
-                InlineKeyboardButton.WithCallbackData("✏️ Редактировать", $"debt:edit:{debtId}"),
+                InlineKeyboardButton.WithCallbackData("✏️ Изменить", $"debt:edit:{debtId}"),
                 InlineKeyboardButton.WithCallbackData("🗑 Удалить", $"debt:delete:{debtId}")
             },
             new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "debt:main") }
@@ -126,8 +140,11 @@ public static class DebtKeyboards
     // После создания долга
     public static InlineKeyboardMarkup AfterCreate() => new(new[]
     {
-        new[] { InlineKeyboardButton.WithCallbackData("📋 Все долги", "debt:main") },
-        new[] { InlineKeyboardButton.WithCallbackData("🔙 В меню", "menu:main") }
+        new[] 
+        { 
+            InlineKeyboardButton.WithCallbackData("🔙 В меню", "menu:main"),
+            InlineKeyboardButton.WithCallbackData("📋 Все долги", "debt:main") 
+        }
     });
 
     // После платежа (есть остаток)
