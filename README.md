@@ -1,6 +1,6 @@
 # 💰 CashTrack
 
-![CashTrack Banner](cashtrack_banner_1768215796600.png)
+![CashTrack Banner](cashtrack_banner.png)
 
 > **CashTrack** — это профессиональный Telegram-бот для глубокого контроля личных финансов. Спроектирован для тех, кто хочет перестать тратить деньги впустую и начать эффективно копить на свои цели.
 
